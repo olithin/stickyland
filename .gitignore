@@ -30,3 +30,7 @@ out/
 # Local logs
 build-log.txt
 *.log
+
+# Cursor IDE / local git hooks (do not publish)
+.cursor/
+.githooks/
