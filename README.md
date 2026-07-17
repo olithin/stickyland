@@ -15,16 +15,6 @@ Download the installer from **[Releases](../../releases)** — no Git clone, no 
 
 Full guide: **[INSTALL.md](INSTALL.md)**
 
-### First launch
-
-Stickyland creates a **local SQLite database** (`notes.db`) automatically.  
-You do **not** install a separate database.
-
-| OS | Data folder |
-|----|-------------|
-| Windows | `D:\Stickyland\` or `%LOCALAPPDATA%\Stickyland\` |
-| macOS | `~/Library/Application Support/Stickyland/` |
-
 ---
 
 ## Features
