@@ -1,92 +1,60 @@
 # Install Stickyland
 
-**Language:** English (app UI and install docs).
-
-Stickyland is a **local** notes app. Everything stays on your computer — no cloud, no account, no internet required after download.
+Download an installer from **GitHub → Releases**.  
+No Git, no PowerShell scripts, no JDK.
 
 ---
 
-## What gets installed
+## Windows
 
-| Component | What it is |
-|-----------|------------|
-| **Stickyland app** | The program (window, editor, search) |
-| **Local SQLite database** | Created **automatically on first launch** — stores your notes and suites |
-| **Images folder** | Created automatically — stores pasted/attached screenshots |
-| **Java runtime** | Bundled inside the app — you do **not** install JDK yourself |
+1. Open **Releases** → pick a version (e.g. **v1.0.0**)
+2. Download the **`.msi`** installer
+3. Double-click it and complete the setup wizard
+4. Launch **Stickyland** from the Start menu or desktop
 
-You do **not** install PostgreSQL, MySQL, or any separate database server.  
-The database is a single file (`notes.db`) managed by Stickyland.
+The app icon is included in the installer (from `icon.ico` in the project).
 
-### Where the database is created
+On **first launch**, Stickyland creates a **local SQLite database** automatically:
 
-| OS | Folder |
-|----|--------|
-| **macOS** | `~/Library/Application Support/Stickyland/` |
-| **Windows** | `D:\Stickyland\` (if drive D: exists), otherwise `%LOCALAPPDATA%\Stickyland\` |
-| **Linux** | `~/.stickyland/` |
+- `D:\Stickyland\notes.db` (if drive D: is available), or  
+- `%LOCALAPPDATA%\Stickyland\notes.db`
 
-Contents after first launch:
+You do **not** install any separate database software.
+
+---
+
+## macOS
+
+1. Open **Releases** → pick a version
+2. Download the **`.dmg`**
+3. Open it → drag **Stickyland** into **Applications**
+4. Launch Stickyland  
+   - If macOS blocks it: right-click → **Open** → **Open**
+
+On **first launch**, the local database is created at:
 
 ```
-Stickyland/
-├── notes.db      ← SQLite database (created automatically)
-└── images/       ← screenshots (created automatically)
-```
-
----
-
-## macOS (from GitHub Releases)
-
-1. Open the repository → **Releases**
-2. Choose a version (e.g. **v1.0.0**)
-3. Download the **`.dmg`** file
-4. Double-click the DMG
-5. Drag **Stickyland** into **Applications**
-6. Open **Stickyland** from Applications  
-   - On first launch the **local database** (`notes.db`) is created automatically  
-   - If macOS blocks the app: right-click → **Open** → **Open**
-
-No other software is required.
-
----
-
-## Windows (from GitHub Releases)
-
-1. Open the repository → **Releases**
-2. Choose a version (e.g. **v1.0.0**)
-3. Download the **`.msi`** (recommended) or **`.exe`**
-4. Run the installer and follow the steps
-5. Launch **Stickyland**  
-   - On first launch the **local database** is created automatically
-
-No other software is required.
-
----
-
-## After install — first notes
-
-1. Start Stickyland  
-2. A default suite (**General**) is created if needed  
-3. Create or edit notes — they are saved to the local SQLite database (auto-save)
-
----
-
-## Uninstall / remove your data
-
-- **Uninstalling the app** removes the program only.  
-- **Your notes database** stays in the folders above until you delete that folder yourself.
-
-To delete all notes on macOS:
-
-```bash
-rm -rf ~/Library/Application\ Support/Stickyland
+~/Library/Application Support/Stickyland/notes.db
 ```
 
 ---
 
-## More detail
+## What you get
 
-- Releases / version tags: [RELEASES.md](RELEASES.md)  
-- macOS build from source: [INSTALL-MAC.md](INSTALL-MAC.md)  
-- Full project docs: [README.md](README.md)
+| Included | Notes |
+|----------|--------|
+| Stickyland app | With icon |
+| Bundled Java runtime | No JDK install |
+| Local SQLite database | Created on first launch |
+| Images folder | For screenshots |
+
+---
+
+## Uninstall
+
+Removing the app does **not** delete your notes.  
+To remove all data on Windows, delete the `Stickyland` data folder above.
+
+---
+
+More: [README.md](README.md) · [RELEASES.md](RELEASES.md)

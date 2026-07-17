@@ -106,8 +106,6 @@ jobs:
           body: |
             ## Stickyland ${{ github.ref_name }}
 
-            Local notes app — **English UI**.
-
             ### Install
             - **macOS:** download the `.dmg` → drag Stickyland to Applications
             - **Windows:** download the `.msi` or `.exe` and run it
