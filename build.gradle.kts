@@ -44,9 +44,9 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe)
             packageName = "Stickyland"
             packageVersion = "1.0.0"
-            description = "Stickyland — local notes with screenshots"
+            description = "Stickyland - local notes with screenshots"
             vendor = "Stickyland"
-            copyright = "© Stickyland"
+            copyright = "Copyright Stickyland"
             modules("java.sql")
 
             windows {

@@ -21,11 +21,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 25
+      # jpackage from JDK 25 is flaky on macOS CI; use 21 for packaging.
+      # Last setup-java wins JAVA_HOME → Gradle/jpackage use 21.
+      # Kotlin jvmToolchain(25) still compiles with 25 via foojay.
+      - name: Set up JDK 25 for Kotlin toolchain
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "25"
+
+      - name: Set up JDK 21 for jpackage
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
 
       - name: Clear local Windows JDK path
         run: |
@@ -55,6 +64,8 @@ jobs:
       - name: Build DMG
         run: |
           chmod +x gradlew
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
           ./gradlew packageDmg --no-daemon --stacktrace
 
       - name: Show jpackage logs on failure
