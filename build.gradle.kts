@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "com.stickyland"
-version = "1.0.0"
+version = "1.0.2"
 
 repositories {
     mavenCentral()
@@ -30,9 +30,10 @@ dependencies {
 }
 
 kotlin {
-    jvmToolchain(25)
+    // Keep bytecode on 21 so the bundled jpackage runtime (JDK 21) can load it.
+    jvmToolchain(21)
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_25)
+        jvmTarget.set(JvmTarget.JVM_21)
     }
 }
 
@@ -43,7 +44,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe)
             packageName = "Stickyland"
-            packageVersion = "1.0.0"
+            packageVersion = "1.0.2"
             description = "Stickyland - local notes with screenshots"
             vendor = "Stickyland"
             copyright = "Copyright Stickyland"
