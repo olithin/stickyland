@@ -8,10 +8,10 @@ Local desktop notes app (Notion-style).
 
 Download the installer from **[Releases](../../releases)** — no Git clone, no scripts.
 
-| OS | File | What to do |
-|----|------|------------|
-| **Windows** | **`.msi`** | Double-click → Next → Finish → open Stickyland |
-| **macOS** | **`.dmg`** | Open → drag Stickyland to **Applications** |
+| OS | File |
+|----|------|
+| **Windows** | **`.msi`** |
+| **macOS** | **`.dmg`** |
 
 Full guide: **[INSTALL.md](INSTALL.md)**
 
