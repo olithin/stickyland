@@ -1,0 +1,32 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local app data (never commit user notes)
+*.db
+images/
+
+# Kotlin
+.kotlin/
+
+# Distribution
+out/
+*.msi
+*.dmg
+*.deb
+
+# Local logs
+build-log.txt
+*.log

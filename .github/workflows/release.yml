@@ -1,0 +1,125 @@
+name: Release
+
+# Builds installers and attaches them to a GitHub Release when you push a version tag.
+# Example:
+#   git tag v1.0.0
+#   git push origin v1.0.0
+#
+# Users then download from:
+#   https://github.com/<you>/<repo>/releases/tag/v1.0.0
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: macOS DMG
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Clear local Windows JDK path
+        run: |
+          if [ -f gradle.properties ]; then
+            sed -i.bak 's/^org.gradle.java.home=/# org.gradle.java.home=/' gradle.properties || true
+          fi
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build DMG
+        run: |
+          chmod +x gradlew
+          ./gradlew packageDmg --no-daemon
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stickyland-macos-dmg
+          path: build/compose/binaries/main/dmg/*.dmg
+          if-no-files-found: error
+
+  build-windows:
+    name: Windows MSI / EXE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Clear local Windows JDK path
+        shell: bash
+        run: |
+          if [ -f gradle.properties ]; then
+            sed -i.bak 's/^org.gradle.java.home=/# org.gradle.java.home=/' gradle.properties || true
+          fi
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Windows packages
+        run: .\gradlew.bat packageMsi packageExe --no-daemon
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stickyland-windows
+          path: |
+            build/compose/binaries/main/msi/*.msi
+            build/compose/binaries/main/exe/*.exe
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: List assets
+        run: find release-assets -type f
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Stickyland ${{ github.ref_name }}
+          body: |
+            ## Stickyland ${{ github.ref_name }}
+
+            Local notes app — **English UI**.
+
+            ### Install
+            - **macOS:** download the `.dmg` → drag Stickyland to Applications
+            - **Windows:** download the `.msi` or `.exe` and run it
+
+            ### Local database
+            On **first launch**, Stickyland automatically creates a **local SQLite database** (`notes.db`) on your computer.
+            You do **not** need to install any separate database server.
+
+            See [INSTALL.md](INSTALL.md) for paths and details.
+          generate_release_notes: true
+          files: |
+            release-assets/stickyland-macos-dmg/*
+            release-assets/stickyland-windows/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
