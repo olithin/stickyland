@@ -1,0 +1,12 @@
+#!/bin/sh
+# Strip Cursor auto-attribution from commit messages.
+MSG_FILE="$1"
+[ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ] || exit 0
+
+tmp="${MSG_FILE}.tmp.$$"
+# Remove Cursor attribution lines (works with Git for Windows / Git Bash)
+grep -vi 'cursoragent@cursor.com' "$MSG_FILE" \
+  | grep -vi 'Co-authored-by: Cursor' \
+  | grep -vi 'Made-with: Cursor' > "$tmp"
+mv "$tmp" "$MSG_FILE"
+exit 0

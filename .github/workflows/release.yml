@@ -2,11 +2,8 @@ name: Release
 
 # Builds installers and attaches them to a GitHub Release when you push a version tag.
 # Example:
-#   git tag v1.0.0
-#   git push origin v1.0.0
-#
-# Users then download from:
-#   https://github.com/<you>/<repo>/releases/tag/v1.0.0
+#   git tag v1.0.1
+#   git push origin v1.0.1
 
 on:
   push:
@@ -36,15 +33,38 @@ jobs:
             sed -i.bak 's/^org.gradle.java.home=/# org.gradle.java.home=/' gradle.properties || true
           fi
 
+      - name: Build macOS ICNS from PNG
+        run: |
+          mkdir -p icon.iconset
+          sips -z 16 16     src/main/resources/icon.png --out icon.iconset/icon_16x16.png
+          sips -z 32 32     src/main/resources/icon.png --out icon.iconset/icon_16x16@2x.png
+          sips -z 32 32     src/main/resources/icon.png --out icon.iconset/icon_32x32.png
+          sips -z 64 64     src/main/resources/icon.png --out icon.iconset/icon_32x32@2x.png
+          sips -z 128 128   src/main/resources/icon.png --out icon.iconset/icon_128x128.png
+          sips -z 256 256   src/main/resources/icon.png --out icon.iconset/icon_128x128@2x.png
+          sips -z 256 256   src/main/resources/icon.png --out icon.iconset/icon_256x256.png
+          sips -z 512 512   src/main/resources/icon.png --out icon.iconset/icon_256x256@2x.png
+          sips -z 512 512   src/main/resources/icon.png --out icon.iconset/icon_512x512.png
+          sips -z 1024 1024 src/main/resources/icon.png --out icon.iconset/icon_512x512@2x.png
+          iconutil -c icns icon.iconset -o src/main/resources/icon.icns
+          ls -la src/main/resources/icon.icns
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build DMG
         run: |
           chmod +x gradlew
-          ./gradlew packageDmg --no-daemon
+          ./gradlew packageDmg --no-daemon --stacktrace
+
+      - name: Show jpackage logs on failure
+        if: failure()
+        run: |
+          echo "=== jpackage error logs ==="
+          find build/compose/logs -type f -print -exec cat {} \; || true
 
       - name: Upload DMG artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: stickyland-macos-dmg
@@ -74,9 +94,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build Windows packages
-        run: .\gradlew.bat packageMsi packageExe --no-daemon
+        run: .\gradlew.bat packageMsi packageExe --no-daemon --stacktrace
 
       - name: Upload Windows artifacts
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: stickyland-windows
@@ -89,15 +110,20 @@ jobs:
     name: Publish GitHub Release
     needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Publish even if one OS failed, as long as at least one build succeeded
+    if: |
+      always() &&
+      startsWith(github.ref, 'refs/tags/v') &&
+      (needs.build-windows.result == 'success' || needs.build-macos.result == 'success')
     steps:
-      - name: Download all artifacts
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
+          merge-multiple: false
 
       - name: List assets
-        run: find release-assets -type f
+        run: find release-assets -type f || true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -107,17 +133,16 @@ jobs:
             ## Stickyland ${{ github.ref_name }}
 
             ### Install
+            - **Windows:** download the `.msi` (or `.exe`) and run it
             - **macOS:** download the `.dmg` → drag Stickyland to Applications
-            - **Windows:** download the `.msi` or `.exe` and run it
 
-            ### Local database
-            On **first launch**, Stickyland automatically creates a **local SQLite database** (`notes.db`) on your computer.
-            You do **not** need to install any separate database server.
-
-            See [INSTALL.md](INSTALL.md) for paths and details.
+            On first launch a local SQLite database is created automatically.
+            See [INSTALL.md](INSTALL.md) for details.
           generate_release_notes: true
           files: |
-            release-assets/stickyland-macos-dmg/*
-            release-assets/stickyland-windows/**
+            release-assets/**/*.dmg
+            release-assets/**/*.msi
+            release-assets/**/*.exe
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

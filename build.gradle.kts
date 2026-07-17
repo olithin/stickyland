@@ -55,7 +55,7 @@ compose.desktop {
                 upgradeUuid = "B2C3D4E5-F6A7-8901-BCDE-F12345678901"
             }
             macOS {
-                iconFile.set(project.file("src/main/resources/icon.png"))
+                iconFile.set(project.file("src/main/resources/icon.icns"))
                 bundleID = "com.stickyland.app"
                 dockName = "Stickyland"
             }
