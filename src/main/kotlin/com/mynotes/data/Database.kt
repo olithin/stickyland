@@ -108,7 +108,13 @@ object DatabaseFactory {
         val url = "jdbc:sqlite:${AppPaths.databaseFile.absolutePath}"
         Database.connect(url, driver = "org.sqlite.JDBC")
         transaction {
-            SchemaUtils.createMissingTablesAndColumns(SuitesTable, NotesTable, NoteImagesTable)
+            SchemaUtils.createMissingTablesAndColumns(
+                SuitesTable,
+                NotesTable,
+                NoteImagesTable,
+                SchemaNodesTable,
+                SchemaEdgesTable
+            )
         }
     }
 }

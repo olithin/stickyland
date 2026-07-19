@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "com.stickyland"
-version = "1.0.3"
+version = "1.1.0"
 
 repositories {
     mavenCentral()
@@ -44,10 +44,10 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe)
             packageName = "Stickyland"
-            packageVersion = "1.0.3"
+            packageVersion = "1.1.0"
             description = "Stickyland - local notes with screenshots"
-            vendor = "Stickyland"
-            copyright = "Copyright Stickyland"
+            vendor = "olithin"
+            copyright = "Copyright olithin"
             modules("java.sql")
 
             windows {

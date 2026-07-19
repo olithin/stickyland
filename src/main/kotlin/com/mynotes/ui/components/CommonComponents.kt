@@ -106,6 +106,7 @@ fun InputDialog(
     initialValue: String = "",
     placeholder: String = "",
     confirmText: String = "Save",
+    allowBlank: Boolean = false,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -128,7 +129,10 @@ fun InputDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(value) }, enabled = value.isNotBlank()) {
+            TextButton(
+                onClick = { onConfirm(value) },
+                enabled = allowBlank || value.isNotBlank()
+            ) {
                 Text(confirmText, color = AppColors.Accent)
             }
         },

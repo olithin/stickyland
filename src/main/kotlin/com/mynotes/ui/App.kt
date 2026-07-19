@@ -8,8 +8,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.mynotes.ui.components.NoteEditor
 import com.mynotes.ui.components.NoteListPanel
+import com.mynotes.ui.components.SchemaPanel
 import com.mynotes.ui.components.Sidebar
 import com.mynotes.ui.theme.AppColors
+import com.mynotes.data.MainPanelMode
 
 @Composable
 fun App(viewModel: AppViewModel) {
@@ -56,22 +58,31 @@ fun App(viewModel: AppViewModel) {
                         .width(1.dp),
                     color = AppColors.Border
                 )
-                NoteListPanel(
-                    viewModel = viewModel,
-                    modifier = Modifier.background(AppColors.Background)
-                )
-                Divider(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(1.dp),
-                    color = AppColors.Border
-                )
-                NoteEditor(
-                    viewModel = viewModel,
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(AppColors.Background)
-                )
+                if (state.mainPanelMode == MainPanelMode.NOTES) {
+                    NoteListPanel(
+                        viewModel = viewModel,
+                        modifier = Modifier.background(AppColors.Background)
+                    )
+                    Divider(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(1.dp),
+                        color = AppColors.Border
+                    )
+                    NoteEditor(
+                        viewModel = viewModel,
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(AppColors.Background)
+                    )
+                } else {
+                    SchemaPanel(
+                        viewModel = viewModel,
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(AppColors.Background)
+                    )
+                }
             }
         }
     }

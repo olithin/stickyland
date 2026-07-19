@@ -15,10 +15,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mynotes.data.NoteTree
+import com.mynotes.data.MainPanelMode
 import com.mynotes.data.Suite
 import com.mynotes.ui.AppViewModel
+import com.mynotes.ui.theme.AppBrandHeader
 import com.mynotes.ui.theme.AppColors
+import com.mynotes.ui.theme.OlithinMark
 import java.time.format.DateTimeFormatter
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 
 @Composable
 fun Sidebar(
@@ -43,12 +51,26 @@ fun Sidebar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("📝", fontSize = 22.sp)
-            Text(
-                "Stickyland",
-                modifier = Modifier.padding(start = 8.dp),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = AppColors.TextPrimary
+            AppBrandHeader(modifier = Modifier.padding(start = 8.dp))
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            ModeChip(
+                label = "Notes",
+                selected = state.mainPanelMode == MainPanelMode.NOTES,
+                onClick = { viewModel.setMainPanelMode(MainPanelMode.NOTES) },
+                modifier = Modifier.weight(1f)
+            )
+            ModeChip(
+                label = "Schema",
+                selected = state.mainPanelMode == MainPanelMode.SCHEMA,
+                onClick = { viewModel.setMainPanelMode(MainPanelMode.SCHEMA) },
+                modifier = Modifier.weight(1f)
             )
         }
 
@@ -77,6 +99,12 @@ fun Sidebar(
             modifier = Modifier.fillMaxWidth().padding(8.dp),
             backgroundColor = AppColors.SidebarSelected,
             contentColor = AppColors.TextPrimary
+        )
+
+        OlithinMark(
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .padding(top = 4.dp, bottom = 4.dp)
         )
     }
 
@@ -202,5 +230,29 @@ fun NoteListPanel(
                 modifier = Modifier.weight(1f)
             )
         }
+    }
+}
+
+@Composable
+private fun ModeChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (selected) AppColors.Accent.copy(alpha = 0.12f) else AppColors.InputBackground)
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            label,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) AppColors.Accent else AppColors.TextSecondary
+        )
     }
 }

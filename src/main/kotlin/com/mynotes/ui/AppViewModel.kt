@@ -21,7 +21,15 @@ data class AppUiState(
     val isSearching: Boolean = false,
     val lightboxImage: NoteImage? = null,
     val expandedNoteIds: Set<String> = emptySet(),
-    val statusMessage: String? = null
+    val statusMessage: String? = null,
+    val mainPanelMode: MainPanelMode = MainPanelMode.NOTES,
+    val schemaGraph: SchemaGraph = SchemaGraph(),
+    val selectedSchemaNodeId: String? = null,
+    val selectedSchemaEdgeId: String? = null,
+    val linkFromNodeId: String? = null,
+    val schemaPanX: Float = 0f,
+    val schemaPanY: Float = 0f,
+    val schemaZoom: Float = 1f
 )
 
 class AppViewModel(
@@ -49,7 +57,8 @@ class AppViewModel(
             suites = suites,
             selectedSuiteId = defaultSuite.id,
             notes = notes,
-            expandedNoteIds = expandableIds
+            expandedNoteIds = expandableIds,
+            schemaGraph = repository.getSchema(defaultSuite.id)
         )
     }
 
@@ -64,6 +73,7 @@ class AppViewModel(
                 .filter { parent -> notes.any { it.parentId == parent.id } }
                 .map { it.id }
                 .toSet()
+            val schema = repository.getSchema(suiteId)
             updateState {
                 it.copy(
                     selectedSuiteId = suiteId,
@@ -72,10 +82,318 @@ class AppViewModel(
                     currentNote = null,
                     expandedNoteIds = expandableIds,
                     isSearching = false,
-                    searchQuery = ""
+                    searchQuery = "",
+                    schemaGraph = schema,
+                    selectedSchemaNodeId = null,
+                    linkFromNodeId = null
                 )
             }
         }
+    }
+
+    fun setMainPanelMode(mode: MainPanelMode) {
+        val suiteId = state.selectedSuiteId
+        updateState {
+            it.copy(
+                mainPanelMode = mode,
+                linkFromNodeId = null,
+                selectedSchemaNodeId = if (mode == MainPanelMode.SCHEMA) it.selectedSchemaNodeId else null
+            )
+        }
+        if (mode == MainPanelMode.SCHEMA && suiteId != null) {
+            scope.launch {
+                val schema = repository.getSchema(suiteId)
+                updateState { it.copy(schemaGraph = schema) }
+            }
+        }
+    }
+
+    fun setSchemaPanZoom(panX: Float, panY: Float, zoom: Float) {
+        updateState {
+            it.copy(
+                schemaPanX = panX,
+                schemaPanY = panY,
+                schemaZoom = zoom.coerceIn(0.35f, 2.5f)
+            )
+        }
+    }
+
+    fun createSchemaCard(parentId: String? = null) {
+        val suiteId = state.selectedSuiteId ?: return
+        scope.launch {
+            val parent = parentId?.let { id -> state.schemaGraph.nodes.find { it.id == id } }
+            val node = repository.createSchemaNode(
+                suiteId = suiteId,
+                title = "New card",
+                parentId = parentId,
+                posX = (parent?.posX ?: 80.0) + if (parentId != null) 240.0 else 40.0,
+                posY = (parent?.posY ?: 80.0) + if (parentId != null) 40.0 else
+                    state.schemaGraph.nodes.size * 30.0,
+                hint = ""
+            )
+            val schema = repository.getSchema(suiteId)
+            updateState {
+                it.copy(
+                    schemaGraph = schema,
+                    selectedSchemaNodeId = node.id,
+                    statusMessage = if (parentId == null) "Card created" else "Child card created"
+                )
+            }
+        }
+    }
+
+    fun selectSchemaNode(nodeId: String?) {
+        updateState {
+            it.copy(
+                selectedSchemaNodeId = nodeId,
+                selectedSchemaEdgeId = null
+            )
+        }
+    }
+
+    fun selectSchemaEdge(edgeId: String?) {
+        updateState {
+            it.copy(
+                selectedSchemaEdgeId = edgeId,
+                selectedSchemaNodeId = if (edgeId != null) null else it.selectedSchemaNodeId
+            )
+        }
+    }
+
+    fun connectSchemaNodes(
+        fromNodeId: String,
+        toNodeId: String,
+        fromOffsetX: Double,
+        fromOffsetY: Double,
+        toOffsetX: Double,
+        toOffsetY: Double
+    ) {
+        val suiteId = state.selectedSuiteId ?: return
+        if (fromNodeId == toNodeId) return
+        scope.launch {
+            val edge = repository.createSchemaEdge(
+                suiteId = suiteId,
+                fromNodeId = fromNodeId,
+                toNodeId = toNodeId,
+                fromOffsetX = fromOffsetX,
+                fromOffsetY = fromOffsetY,
+                toOffsetX = toOffsetX,
+                toOffsetY = toOffsetY
+            )
+            val schema = repository.getSchema(suiteId)
+            updateState {
+                it.copy(
+                    schemaGraph = schema,
+                    linkFromNodeId = null,
+                    selectedSchemaNodeId = toNodeId,
+                    selectedSchemaEdgeId = edge?.id,
+                    statusMessage = if (edge != null) "Arrow created" else "Link already exists"
+                )
+            }
+        }
+    }
+
+    fun deleteSelectedSchema() {
+        val edgeId = state.selectedSchemaEdgeId
+        if (edgeId != null) {
+            deleteSchemaEdge(edgeId)
+            return
+        }
+        deleteSelectedSchemaNode()
+    }
+
+    fun updateSchemaNodeTitle(nodeId: String, title: String) {
+        val node = state.schemaGraph.nodes.find { it.id == nodeId } ?: return
+        val updated = node.copy(title = title)
+        patchSchemaNode(updated)
+    }
+
+    fun updateSchemaNodeHint(nodeId: String, hint: String) {
+        val node = state.schemaGraph.nodes.find { it.id == nodeId } ?: return
+        val updated = node.copy(hint = hint)
+        patchSchemaNode(updated, "Hint saved")
+    }
+
+    fun moveSchemaNode(nodeId: String, posX: Double, posY: Double) {
+        val node = state.schemaGraph.nodes.find { it.id == nodeId } ?: return
+        val updated = node.copy(posX = posX, posY = posY)
+        updateState {
+            it.copy(schemaGraph = it.schemaGraph.copy(
+                nodes = it.schemaGraph.nodes.map { n -> if (n.id == nodeId) updated else n }
+            ))
+        }
+        scope.launch { repository.updateSchemaNode(updated) }
+    }
+
+    fun resizeSchemaNode(nodeId: String, width: Double, height: Double) {
+        val node = state.schemaGraph.nodes.find { it.id == nodeId } ?: return
+        val newW = width.coerceIn(SchemaEdge.CARD_MIN_W, SchemaEdge.CARD_MAX_W)
+        val newH = height.coerceIn(SchemaEdge.CARD_MIN_H, SchemaEdge.CARD_MAX_H)
+        val oldW = node.w()
+        val oldH = node.h()
+        val updated = node.copy(width = newW, height = newH)
+        val remappedEdges = state.schemaGraph.edges.map { edge ->
+            var next = edge
+            if (edge.fromNodeId == nodeId) {
+                val port = SchemaPort.nearest(
+                    edge.fromOffsetX.toFloat(),
+                    edge.fromOffsetY.toFloat(),
+                    oldW,
+                    oldH
+                )
+                val o = port.offset(newW.toFloat(), newH.toFloat())
+                next = next.copy(fromOffsetX = o.x.toDouble(), fromOffsetY = o.y.toDouble())
+            }
+            if (edge.toNodeId == nodeId) {
+                val port = SchemaPort.nearest(
+                    edge.toOffsetX.toFloat(),
+                    edge.toOffsetY.toFloat(),
+                    oldW,
+                    oldH
+                )
+                val o = port.offset(newW.toFloat(), newH.toFloat())
+                next = next.copy(toOffsetX = o.x.toDouble(), toOffsetY = o.y.toDouble())
+            }
+            next
+        }
+        updateState {
+            it.copy(
+                schemaGraph = it.schemaGraph.copy(
+                    nodes = it.schemaGraph.nodes.map { n -> if (n.id == nodeId) updated else n },
+                    edges = remappedEdges
+                )
+            )
+        }
+        scope.launch {
+            repository.updateSchemaNode(updated)
+            remappedEdges
+                .filter { it.fromNodeId == nodeId || it.toNodeId == nodeId }
+                .forEach { repository.updateSchemaEdge(it) }
+        }
+    }
+
+    fun toggleSchemaNodeCollapsed(nodeId: String) {
+        val node = state.schemaGraph.nodes.find { it.id == nodeId } ?: return
+        patchSchemaNode(node.copy(collapsed = !node.collapsed))
+    }
+
+    fun deleteSelectedSchemaNode() {
+        val nodeId = state.selectedSchemaNodeId ?: return
+        val suiteId = state.selectedSuiteId ?: return
+        scope.launch {
+            repository.deleteSchemaNode(nodeId)
+            val schema = repository.getSchema(suiteId)
+            updateState {
+                it.copy(
+                    schemaGraph = schema,
+                    selectedSchemaNodeId = null,
+                    selectedSchemaEdgeId = null,
+                    linkFromNodeId = null,
+                    statusMessage = "Card deleted"
+                )
+            }
+        }
+    }
+
+    fun beginOrCompleteLink(nodeId: String) {
+        val suiteId = state.selectedSuiteId ?: return
+        val from = state.linkFromNodeId
+        if (from == null) {
+            updateState {
+                it.copy(
+                    linkFromNodeId = nodeId,
+                    selectedSchemaNodeId = nodeId,
+                    statusMessage = "Link mode: click another card"
+                )
+            }
+            return
+        }
+        if (from == nodeId) {
+            updateState { it.copy(linkFromNodeId = null, statusMessage = "Link cancelled") }
+            return
+        }
+        scope.launch {
+            val edge = repository.createSchemaEdge(
+                suiteId = suiteId,
+                fromNodeId = from,
+                toNodeId = nodeId,
+                fromOffsetX = SchemaEdge.CARD_W_DEFAULT,
+                fromOffsetY = SchemaEdge.CARD_H_DEFAULT / 2.0,
+                toOffsetX = 0.0,
+                toOffsetY = SchemaEdge.CARD_H_DEFAULT / 2.0
+            )
+            val schema = repository.getSchema(suiteId)
+            updateState {
+                it.copy(
+                    schemaGraph = schema,
+                    linkFromNodeId = null,
+                    selectedSchemaNodeId = nodeId,
+                    statusMessage = if (edge != null) "Arrow created" else "Link already exists"
+                )
+            }
+        }
+    }
+
+    fun cancelLinkMode() {
+        updateState { it.copy(linkFromNodeId = null) }
+    }
+
+    fun deleteSchemaEdge(edgeId: String) {
+        val suiteId = state.selectedSuiteId ?: return
+        scope.launch {
+            repository.deleteSchemaEdge(edgeId)
+            val schema = repository.getSchema(suiteId)
+            updateState {
+                it.copy(
+                    schemaGraph = schema,
+                    selectedSchemaEdgeId = null,
+                    statusMessage = "Arrow removed"
+                )
+            }
+        }
+    }
+
+    fun autoBuildSchemaFromNotes() {
+        val suiteId = state.selectedSuiteId ?: return
+        scope.launch {
+            val notes = repository.getNotesBySuite(suiteId)
+            if (notes.isEmpty()) {
+                updateState { it.copy(statusMessage = "No notes to build from") }
+                return@launch
+            }
+            val graph = SchemaFromNotes.build(suiteId, notes)
+            val saved = repository.replaceSchema(suiteId, graph)
+            updateState {
+                it.copy(
+                    schemaGraph = saved,
+                    selectedSchemaNodeId = null,
+                    linkFromNodeId = null,
+                    schemaPanX = 0f,
+                    schemaPanY = 0f,
+                    schemaZoom = 1f,
+                    statusMessage = "Schema built from ${notes.size} notes · olithin"
+                )
+            }
+        }
+    }
+
+    private fun patchSchemaNode(updated: SchemaNode, message: String? = null) {
+        updateState {
+            it.copy(
+                schemaGraph = it.schemaGraph.copy(
+                    nodes = it.schemaGraph.nodes.map { n -> if (n.id == updated.id) updated else n }
+                ),
+                statusMessage = message ?: it.statusMessage
+            )
+        }
+        scope.launch { repository.updateSchemaNode(updated) }
+    }
+
+    fun openLinkedNote(nodeId: String) {
+        val node = state.schemaGraph.nodes.find { it.id == nodeId } ?: return
+        val noteId = node.linkedNoteId ?: return
+        setMainPanelMode(MainPanelMode.NOTES)
+        selectNote(noteId)
     }
 
     fun selectNote(noteId: String) {
@@ -342,6 +660,10 @@ class AppViewModel(
 
     fun clearStatus() {
         updateState { it.copy(statusMessage = null) }
+    }
+
+    fun setStatus(message: String) {
+        updateState { it.copy(statusMessage = message) }
     }
 
     fun dispose() {

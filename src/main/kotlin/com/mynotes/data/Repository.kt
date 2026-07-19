@@ -39,6 +39,7 @@ class NotesRepository {
     }
 
     fun deleteSuite(suiteId: String) {
+        clearSchema(suiteId)
         val noteIds = transaction {
             NotesTable.select { NotesTable.suiteId eq suiteId }.map { it[NotesTable.id] }
         }
@@ -47,6 +48,207 @@ class NotesRepository {
             SuitesTable.deleteWhere { SuitesTable.id eq suiteId }
         }
     }
+
+    fun getSchema(suiteId: String): SchemaGraph = transaction {
+        val nodes = SchemaNodesTable.select { SchemaNodesTable.suiteId eq suiteId }
+            .orderBy(SchemaNodesTable.sortOrder to SortOrder.ASC, SchemaNodesTable.createdAt to SortOrder.ASC)
+            .map { rowToSchemaNode(it) }
+        val edges = SchemaEdgesTable.select { SchemaEdgesTable.suiteId eq suiteId }
+            .orderBy(SchemaEdgesTable.createdAt to SortOrder.ASC)
+            .map { rowToSchemaEdge(it) }
+        SchemaGraph(nodes, edges)
+    }
+
+    fun clearSchema(suiteId: String) = transaction {
+        SchemaEdgesTable.deleteWhere { SchemaEdgesTable.suiteId eq suiteId }
+        SchemaNodesTable.deleteWhere { SchemaNodesTable.suiteId eq suiteId }
+    }
+
+    fun replaceSchema(suiteId: String, graph: SchemaGraph): SchemaGraph {
+        clearSchema(suiteId)
+        transaction {
+            graph.nodes.forEach { node -> insertSchemaNode(node) }
+            graph.edges.forEach { edge -> insertSchemaEdge(edge) }
+        }
+        return getSchema(suiteId)
+    }
+
+    fun createSchemaNode(
+        suiteId: String,
+        title: String = "New card",
+        parentId: String? = null,
+        posX: Double = 80.0,
+        posY: Double = 80.0,
+        hint: String = ""
+    ): SchemaNode {
+        val sortOrder = transaction {
+            val query = if (parentId == null) {
+                (SchemaNodesTable.suiteId eq suiteId) and (SchemaNodesTable.parentId eq null)
+            } else {
+                (SchemaNodesTable.suiteId eq suiteId) and (SchemaNodesTable.parentId eq parentId)
+            }
+            SchemaNodesTable.select { query }.count().toInt()
+        }
+        val node = SchemaNode(
+            suiteId = suiteId,
+            parentId = parentId,
+            title = title.trim().ifBlank { "New card" },
+            hint = hint,
+            posX = posX,
+            posY = posY,
+            sortOrder = sortOrder
+        )
+        transaction { insertSchemaNode(node) }
+        if (parentId != null) {
+            createSchemaEdge(suiteId, parentId, node.id)
+        }
+        return node
+    }
+
+    fun updateSchemaNode(node: SchemaNode) {
+        val updated = node.copy(
+            title = node.title.trim().ifBlank { "Untitled" },
+            updatedAt = LocalDateTime.now()
+        )
+        transaction {
+            SchemaNodesTable.update({ SchemaNodesTable.id eq updated.id }) {
+                it[title] = updated.title
+                it[hint] = updated.hint
+                it[parentId] = updated.parentId
+                it[linkedNoteId] = updated.linkedNoteId
+                it[posX] = updated.posX
+                it[posY] = updated.posY
+                it[width] = updated.width
+                it[height] = updated.height
+                it[collapsed] = updated.collapsed
+                it[sortOrder] = updated.sortOrder
+                it[updatedAt] = updated.updatedAt
+            }
+        }
+    }
+
+    fun deleteSchemaNode(nodeId: String) {
+        transaction {
+            val children = SchemaNodesTable.select { SchemaNodesTable.parentId eq nodeId }
+                .map { it[SchemaNodesTable.id] }
+            SchemaEdgesTable.deleteWhere {
+                (SchemaEdgesTable.fromNodeId eq nodeId) or (SchemaEdgesTable.toNodeId eq nodeId)
+            }
+            SchemaNodesTable.deleteWhere { SchemaNodesTable.id eq nodeId }
+            children.forEach { childId ->
+                // keep children as roots if parent removed
+                SchemaNodesTable.update({ SchemaNodesTable.id eq childId }) {
+                    it[parentId] = null
+                }
+            }
+        }
+    }
+
+    fun createSchemaEdge(
+        suiteId: String,
+        fromNodeId: String,
+        toNodeId: String,
+        fromOffsetX: Double = SchemaEdge.CARD_W_DEFAULT,
+        fromOffsetY: Double = SchemaEdge.CARD_H_DEFAULT / 2.0,
+        toOffsetX: Double = 0.0,
+        toOffsetY: Double = SchemaEdge.CARD_H_DEFAULT / 2.0
+    ): SchemaEdge? {
+        if (fromNodeId == toNodeId) return null
+        val existing = transaction {
+            SchemaEdgesTable.select {
+                (SchemaEdgesTable.suiteId eq suiteId) and
+                    (SchemaEdgesTable.fromNodeId eq fromNodeId) and
+                    (SchemaEdgesTable.toNodeId eq toNodeId)
+            }.count()
+        }
+        if (existing > 0) return null
+        val edge = SchemaEdge(
+            suiteId = suiteId,
+            fromNodeId = fromNodeId,
+            toNodeId = toNodeId,
+            fromOffsetX = fromOffsetX,
+            fromOffsetY = fromOffsetY,
+            toOffsetX = toOffsetX,
+            toOffsetY = toOffsetY
+        )
+        transaction { insertSchemaEdge(edge) }
+        return edge
+    }
+
+    fun deleteSchemaEdge(edgeId: String) = transaction {
+        SchemaEdgesTable.deleteWhere { SchemaEdgesTable.id eq edgeId }
+    }
+
+    fun updateSchemaEdge(edge: SchemaEdge) = transaction {
+        SchemaEdgesTable.update({ SchemaEdgesTable.id eq edge.id }) {
+            it[fromOffsetX] = edge.fromOffsetX
+            it[fromOffsetY] = edge.fromOffsetY
+            it[toOffsetX] = edge.toOffsetX
+            it[toOffsetY] = edge.toOffsetY
+        }
+    }
+
+    private fun insertSchemaNode(node: SchemaNode) {
+        SchemaNodesTable.insert {
+            it[id] = node.id
+            it[suiteId] = node.suiteId
+            it[parentId] = node.parentId
+            it[linkedNoteId] = node.linkedNoteId
+            it[title] = node.title
+            it[hint] = node.hint
+            it[posX] = node.posX
+            it[posY] = node.posY
+            it[width] = node.width
+            it[height] = node.height
+            it[collapsed] = node.collapsed
+            it[sortOrder] = node.sortOrder
+            it[createdAt] = node.createdAt
+            it[updatedAt] = node.updatedAt
+        }
+    }
+
+    private fun insertSchemaEdge(edge: SchemaEdge) {
+        SchemaEdgesTable.insert {
+            it[id] = edge.id
+            it[suiteId] = edge.suiteId
+            it[fromNodeId] = edge.fromNodeId
+            it[toNodeId] = edge.toNodeId
+            it[fromOffsetX] = edge.fromOffsetX
+            it[fromOffsetY] = edge.fromOffsetY
+            it[toOffsetX] = edge.toOffsetX
+            it[toOffsetY] = edge.toOffsetY
+            it[createdAt] = edge.createdAt
+        }
+    }
+
+    private fun rowToSchemaNode(row: ResultRow) = SchemaNode(
+        id = row[SchemaNodesTable.id],
+        suiteId = row[SchemaNodesTable.suiteId],
+        parentId = row[SchemaNodesTable.parentId],
+        linkedNoteId = row[SchemaNodesTable.linkedNoteId],
+        title = row[SchemaNodesTable.title],
+        hint = row[SchemaNodesTable.hint],
+        posX = row[SchemaNodesTable.posX],
+        posY = row[SchemaNodesTable.posY],
+        width = row[SchemaNodesTable.width],
+        height = row[SchemaNodesTable.height],
+        collapsed = row[SchemaNodesTable.collapsed],
+        sortOrder = row[SchemaNodesTable.sortOrder],
+        createdAt = row[SchemaNodesTable.createdAt],
+        updatedAt = row[SchemaNodesTable.updatedAt]
+    )
+
+    private fun rowToSchemaEdge(row: ResultRow) = SchemaEdge(
+        id = row[SchemaEdgesTable.id],
+        suiteId = row[SchemaEdgesTable.suiteId],
+        fromNodeId = row[SchemaEdgesTable.fromNodeId],
+        toNodeId = row[SchemaEdgesTable.toNodeId],
+        fromOffsetX = row[SchemaEdgesTable.fromOffsetX],
+        fromOffsetY = row[SchemaEdgesTable.fromOffsetY],
+        toOffsetX = row[SchemaEdgesTable.toOffsetX],
+        toOffsetY = row[SchemaEdgesTable.toOffsetY],
+        createdAt = row[SchemaEdgesTable.createdAt]
+    )
 
     fun getNotesBySuite(suiteId: String): List<Note> = transaction {
         val notes = NotesTable.select { NotesTable.suiteId eq suiteId }

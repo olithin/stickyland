@@ -24,8 +24,11 @@ object SplashScreen {
                 border = EmptyBorder(24, 32, 24, 32)
                 add(
                     JLabel(
-                        "<html><center><span style='font-size:18px;font-family:Segoe UI'>Stickyland</span>" +
-                            "<br><span style='font-size:12px;font-family:Segoe UI;color:#666666'>Loading...</span></center></html>",
+                        "<html><center>" +
+                            "<span style='font-size:18px;font-family:Segoe UI'>Stickyland</span>" +
+                            "<br><span style='font-size:11px;font-family:Segoe UI;color:#9B9A97;letter-spacing:2px'>olithin</span>" +
+                            "<br><span style='font-size:12px;font-family:Segoe UI;color:#666666'>Loading...</span>" +
+                            "</center></html>",
                         SwingConstants.CENTER
                     ),
                     BorderLayout.CENTER

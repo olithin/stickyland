@@ -8,6 +8,7 @@ import androidx.compose.ui.window.rememberWindowState
 import com.mynotes.data.DatabaseFactory
 import com.mynotes.ui.App
 import com.mynotes.ui.AppViewModel
+import com.mynotes.ui.theme.Brand
 
 fun main() {
     try {
@@ -28,7 +29,7 @@ fun main() {
                 viewModel.dispose()
                 exitApplication()
             },
-            title = "Stickyland",
+            title = Brand.WINDOW_TITLE,
             state = rememberWindowState(width = 1280.dp, height = 800.dp)
         ) {
             App(viewModel)

@@ -33,6 +33,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.mynotes.data.NoteContentCodec
 import com.mynotes.ui.AppViewModel
 import com.mynotes.ui.theme.AppColors
+import com.mynotes.ui.theme.OlithinMark
 import com.mynotes.util.ClipboardImage
 import org.jetbrains.skia.Image
 import java.io.File
@@ -263,6 +264,7 @@ private fun EmptyEditor(modifier: Modifier = Modifier) {
                 fontSize = 18.sp,
                 color = AppColors.TextMuted
             )
+            OlithinMark(modifier = Modifier.padding(top = 12.dp))
         }
     }
 }
