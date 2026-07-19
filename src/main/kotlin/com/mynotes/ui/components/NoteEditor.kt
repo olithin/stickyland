@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -29,15 +30,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.mynotes.data.BlockDto
 import com.mynotes.data.NoteContentCodec
-import com.mynotes.data.NoteImage
 import com.mynotes.ui.AppViewModel
 import com.mynotes.ui.theme.AppColors
 import com.mynotes.util.ClipboardImage
 import org.jetbrains.skia.Image
-import java.awt.FileDialog
-import java.awt.Frame
 import java.io.File
 
 @Composable
@@ -89,21 +86,29 @@ fun NoteEditor(
         }.toMap()
     }
 
+    fun tryPasteScreenshot(): Boolean {
+        if (!ClipboardImage.hasImage()) return false
+        val targetIndex = textFieldStates.keys
+            .filter { it <= focusedBlockIndex }
+            .maxOrNull()
+            ?: textFieldStates.keys.minOrNull()
+            ?: return false
+        val cursor = textFieldStates[targetIndex]?.selection?.start
+            ?: textFieldStates[targetIndex]?.text?.length
+            ?: 0
+        return viewModel.pasteImageFromClipboard(targetIndex, cursor)
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    event.isCtrlPressed &&
-                    event.key == Key.V &&
-                    ClipboardImage.hasImage()
-                ) {
-                    val cursor = textFieldStates[focusedBlockIndex]?.selection?.start ?: 0
-                    viewModel.pasteImageFromClipboard(focusedBlockIndex, cursor)
-                    true
-                } else {
-                    false
-                }
+                // Notion-style: Cmd+V (Mac) / Ctrl+V (Windows) pastes screenshot into the note.
+                val isPaste =
+                    event.type == KeyEventType.KeyDown &&
+                        event.key == Key.V &&
+                        (event.isMetaPressed || event.isCtrlPressed)
+                if (isPaste && tryPasteScreenshot()) true else false
             }
             .padding(horizontal = 48.dp, vertical = 32.dp)
             .verticalScroll(rememberScrollState())
@@ -127,34 +132,12 @@ fun NoteEditor(
                     )
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                NotionButton(
-                    text = "📷 File",
-                    onClick = {
-                        val cursor = textFieldStates[focusedBlockIndex]?.selection?.start
-                            ?: textFieldStates[focusedBlockIndex]?.text?.length ?: 0
-                        pickImageFile()?.let { file ->
-                            viewModel.addImage(file, focusedBlockIndex, cursor)
-                        }
-                    },
-                    backgroundColor = AppColors.InputBackground,
-                    contentColor = AppColors.TextPrimary
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "Ctrl+V — paste screenshot",
-                    fontSize = 12.sp,
-                    color = AppColors.TextMuted,
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                NotionButton(
-                    text = "Delete",
-                    onClick = { showDeleteConfirm = true },
-                    backgroundColor = AppColors.Danger.copy(alpha = 0.1f),
-                    contentColor = AppColors.Danger
-                )
-            }
+            NotionButton(
+                text = "Delete",
+                onClick = { showDeleteConfirm = true },
+                backgroundColor = AppColors.Danger.copy(alpha = 0.1f),
+                contentColor = AppColors.Danger
+            )
         }
 
         Spacer(Modifier.height(24.dp))
@@ -217,7 +200,7 @@ fun NoteEditor(
                             Box {
                                 if (isOnlyEmptyBlock && fieldValue.text.isEmpty()) {
                                     Text(
-                                        "Start writing...",
+                                        "Start writing, or paste a screenshot…",
                                         fontSize = 16.sp,
                                         color = AppColors.TextMuted.copy(alpha = 0.5f)
                                     )
@@ -434,13 +417,4 @@ private fun loadImageBitmap(file: File): ImageBitmap? {
     } catch (_: Exception) {
         null
     }
-}
-
-private fun pickImageFile(): File? {
-    val dialog = FileDialog(null as Frame?, "Select image", FileDialog.LOAD)
-    dialog.file = "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"
-    dialog.isVisible = true
-    val directory = dialog.directory ?: return null
-    val file = dialog.file ?: return null
-    return File(directory, file)
 }
