@@ -6,17 +6,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
-echo "==> Checking JDK 25..."
-if ! /usr/libexec/java_home -v 25 >/dev/null 2>&1; then
-  echo "JDK 25 not found. Install with:"
-  echo "  brew install --cask temurin@25"
+echo "==> Checking JDK 21..."
+if ! /usr/libexec/java_home -v 21 >/dev/null 2>&1; then
+  echo "JDK 21 not found. Install with:"
+  echo "  brew install --cask temurin@21"
   exit 1
 fi
 
-JAVA_HOME_25="$(/usr/libexec/java_home -v 25)"
-export JAVA_HOME="$JAVA_HOME_25"
+JAVA_HOME_21="$(/usr/libexec/java_home -v 21)"
+export JAVA_HOME="$JAVA_HOME_21"
 export PATH="$JAVA_HOME/bin:$PATH"
 echo "Using JAVA_HOME=$JAVA_HOME"
+echo "Build machine arch: $(uname -m) (this DMG will only run on the same CPU architecture)"
 
 if grep -qE '^org\.gradle\.java\.home=.*(C:|\\\\)' gradle.properties 2>/dev/null; then
   echo "==> Commenting out Windows org.gradle.java.home in gradle.properties"
@@ -44,3 +45,9 @@ echo ""
 echo "Open it:"
 echo "  open \"$DMG\""
 echo "Then drag Stickyland into Applications."
+echo ""
+if [[ "$(uname -m)" == "arm64" ]]; then
+  echo "This local DMG is Apple Silicon only. Intel Macs need *-mac-x64.dmg from GitHub Releases."
+else
+  echo "This local DMG is Intel only. Apple Silicon Macs should use *-mac-arm64.dmg from GitHub Releases."
+fi

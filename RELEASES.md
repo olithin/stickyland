@@ -9,7 +9,9 @@ This is how apps like VS Code / Notion ship builds: you open **Releases**, pick 
 1. Open the GitHub repo → **Releases**  
    (URL looks like `https://github.com/olithin/stickyland/releases`)
 2. Open the version you want, e.g. **v1.0.0**
-3. Download **`Stickyland-1.0.0.dmg`** (exact name may include the version)
+3. Download the **`.dmg` for your Mac** (macOS 11 Big Sur or later):
+   - Apple Silicon (M1/M2/M3/M4): **`Stickyland-*-mac-arm64.dmg`**
+   - Intel: **`Stickyland-*-mac-x64.dmg`**
 4. Double-click the DMG → drag **Stickyland** into **Applications**
 5. Launch the app — a **local SQLite database** is created automatically on first run  
    (no separate database install; see [INSTALL.md](INSTALL.md))
@@ -61,7 +63,7 @@ git push origin v1.0.0
 
 Pushing the tag **`v1.0.0`** starts **GitHub Actions** (`.github/workflows/release.yml`):
 
-- builds **macOS DMG** on a Mac runner  
+- builds **macOS DMG** for Apple Silicon (`arm64`) and Intel (`x64`)  
 - builds **Windows MSI/EXE** on a Windows runner  
 - creates a **GitHub Release** with those files attached  
 
