@@ -25,11 +25,18 @@ You do **not** install any separate database software.
 
 ## macOS
 
+Requires **macOS 11 (Big Sur)** or later.
+
 1. Open **Releases** → pick a version
-2. Download the **`.dmg`**
+2. Download the matching **`.dmg`**:
+   - **Apple Silicon** (M1/M2/M3/M4): `*-mac-arm64.dmg`
+   - **Intel**: `*-mac-x64.dmg`  
+     Check: Apple menu → About This Mac. If the chip is Intel, use the x64 file.
 3. Open it → drag **Stickyland** into **Applications**
 4. Launch Stickyland  
    - If macOS blocks it: right-click → **Open** → **Open**
+
+Apple Silicon builds will not open on Intel Macs (and the other way around).
 
 On **first launch**, the local database is created at:
 

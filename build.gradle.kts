@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "com.stickyland"
-version = "1.1.0"
+version = "1.1.1"
 
 repositories {
     mavenCentral()
@@ -44,7 +44,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe)
             packageName = "Stickyland"
-            packageVersion = "1.1.0"
+            packageVersion = "1.1.1"
             description = "Stickyland - local notes with screenshots"
             vendor = "olithin"
             copyright = "Copyright olithin"
@@ -59,6 +59,9 @@ compose.desktop {
                 iconFile.set(project.file("src/main/resources/icon.icns"))
                 bundleID = "com.stickyland.app"
                 dockName = "Stickyland"
+                // Bundled Temurin 21 requires macOS 11+. Without this, jpackage may stamp
+                // the build machine's OS (e.g. 15) and older Macs refuse to launch.
+                minimumSystemVersion = "11.0"
             }
             linux {
                 iconFile.set(project.file("src/main/resources/icon.png"))

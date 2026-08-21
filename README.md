@@ -11,7 +11,10 @@ Download the installer from **[Releases](../../releases)** — no Git clone, no 
 | OS | File |
 |----|------|
 | **Windows** | **`.msi`** |
-| **macOS** | **`.dmg`** |
+| **macOS Apple Silicon** (M1/M2/M3/M4) | **`*-mac-arm64.dmg`** |
+| **macOS Intel** | **`*-mac-x64.dmg`** |
+
+macOS 11 (Big Sur) or later. Apple Silicon and Intel need different installers.
 
 Full guide: **[INSTALL.md](INSTALL.md)**
 
