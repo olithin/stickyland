@@ -86,11 +86,19 @@ fun Sidebar(
             suites = state.suites,
             selectedSuiteId = if (state.isSearching) null else state.selectedSuiteId,
             noteDragHoverSuiteId = state.noteDragHoverSuiteId,
+            draggingSuiteId = state.draggingSuiteId,
             onSelect = viewModel::selectSuite,
             onRename = { suiteToRename = it },
             onDelete = { suiteToDelete = it },
             onMove = viewModel::moveSuite,
             onRegisterDropTarget = viewModel::registerSuiteDropTarget,
+            onDragStart = { id, x, y ->
+                viewModel.beginSuiteDrag(id)
+                viewModel.updateSuiteDragPointer(x, y)
+            },
+            onDrag = viewModel::updateSuiteDragPointer,
+            onDragHint = viewModel::setSuiteDragHint,
+            onDragEnd = viewModel::clearSuiteDrag,
             modifier = Modifier.weight(1f)
         )
 

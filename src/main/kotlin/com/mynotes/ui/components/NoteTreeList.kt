@@ -17,7 +17,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -371,22 +373,35 @@ private fun DropLine(label: String) {
     }
 }
 
+/**
+ * Floating card that follows the pointer (Notion / Linear style):
+ * grab handle stays visible near the cursor, soft shadow, live drop hint.
+ */
 @Composable
-fun NoteDragGhost(
+fun FloatingDragGhost(
     title: String,
     hint: String?,
+    leadingIcon: String = "📄",
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
-            .widthIn(max = 260.dp)
-            .border(1.dp, AppColors.Accent, RoundedCornerShape(8.dp))
-            .background(AppColors.Card, RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .widthIn(min = 180.dp, max = 280.dp)
+            .graphicsLayer {
+                scaleX = 1.03f
+                scaleY = 1.03f
+                alpha = 0.97f
+            }
+            .shadow(16.dp, RoundedCornerShape(10.dp), ambientColor = Color.Black.copy(alpha = 0.18f))
+            .border(1.dp, AppColors.Accent.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+            .background(AppColors.Card, RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             DragHandle(active = true)
             Spacer(Modifier.width(8.dp))
+            Text(leadingIcon, fontSize = 16.sp)
+            Spacer(Modifier.width(6.dp))
             Text(
                 title,
                 fontSize = 14.sp,
@@ -403,7 +418,7 @@ fun NoteDragGhost(
                 fontSize = 11.sp,
                 color = AppColors.Accent,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 4.dp, start = 4.dp),
+                modifier = Modifier.padding(top = 4.dp, start = 36.dp),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -411,33 +426,58 @@ fun NoteDragGhost(
     }
 }
 
+/** @deprecated Use [FloatingDragGhost] — kept name for call sites during migration. */
+@Composable
+fun NoteDragGhost(
+    title: String,
+    hint: String?,
+    modifier: Modifier = Modifier
+) {
+    FloatingDragGhost(title = title, hint = hint, leadingIcon = "📄", modifier = modifier)
+}
+
 @Composable
 fun SuiteTreeList(
     suites: List<com.mynotes.data.Suite>,
     selectedSuiteId: String?,
     noteDragHoverSuiteId: String?,
+    draggingSuiteId: String?,
     onSelect: (String) -> Unit,
     onRename: (com.mynotes.data.Suite) -> Unit,
     onDelete: (com.mynotes.data.Suite) -> Unit,
     onMove: (draggedId: String, targetId: String, insertBefore: Boolean) -> Unit,
     onRegisterDropTarget: (suiteId: String, rect: DropRect) -> Unit,
+    onDragStart: (suiteId: String, x: Float, y: Float) -> Unit,
+    onDrag: (x: Float, y: Float) -> Unit,
+    onDragHint: (hint: String?) -> Unit,
+    onDragEnd: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var draggedSuiteId by remember { mutableStateOf<String?>(null) }
     var rowLayouts by remember { mutableStateOf<Map<String, RowLayout>>(emptyMap()) }
     var hoverTarget by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
-    var dragAnchorY by remember { mutableFloatStateOf(0f) }
-    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var pointerX by remember { mutableFloatStateOf(0f) }
+    var pointerY by remember { mutableFloatStateOf(0f) }
 
-    fun updateHover(pointerY: Float) {
-        val match = rowLayouts.entries.firstOrNull { (_, layout) ->
-            pointerY in layout.top..layout.bottom
+    fun nameOf(id: String): String =
+        suites.firstOrNull { it.id == id }?.name ?: "topic"
+
+    fun updateHover(y: Float) {
+        val match = rowLayouts.entries.firstOrNull { (id, layout) ->
+            id != draggingSuiteId && y in layout.top..layout.bottom
         }
         hoverTarget = match?.let { (id, layout) ->
-            val relativeY = pointerY - layout.top
+            val relativeY = y - layout.top
             val height = (layout.bottom - layout.top).coerceAtLeast(1f)
             id to (relativeY < height / 2f)
         }
+        val target = hoverTarget
+        onDragHint(
+            when {
+                target == null -> "Release to cancel"
+                target.second -> "Place above «${nameOf(target.first)}»"
+                else -> "Place below «${nameOf(target.first)}»"
+            }
+        )
     }
 
     LazyColumn(
@@ -446,10 +486,11 @@ fun SuiteTreeList(
             .clipToBounds()
     ) {
         items(suites, key = { it.id }) { suite ->
-            val isDragging = draggedSuiteId == suite.id
+            val isDragging = draggingSuiteId == suite.id
             val isNoteDropTarget = noteDragHoverSuiteId == suite.id
-            val isHovered = hoverTarget?.first == suite.id
+            val isHovered = !isDragging && hoverTarget?.first == suite.id
             val insertBefore = hoverTarget?.second ?: true
+            var handleCenterX by remember { mutableFloatStateOf(0f) }
             var handleCenterY by remember { mutableFloatStateOf(0f) }
 
             Column(
@@ -465,26 +506,42 @@ fun SuiteTreeList(
                         onRegisterDropTarget(suite.id, DropRect(left, top, right, bottom))
                     }
             ) {
+                // Insertion line between rows (modern list reorder pattern).
                 if (isHovered && !isNoteDropTarget && insertBefore) {
-                    DropLine(label = "here")
+                    InsertionLine()
                 }
 
+                // Keep the row composed while dragging so the gesture isn't cancelled;
+                // original stays dimmed (Fiori), floating ghost follows the cursor.
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .alpha(if (isDragging) 0.32f else 1f)
                         .then(
-                            if (isNoteDropTarget) {
-                                Modifier
-                                    .border(2.dp, AppColors.Accent, RoundedCornerShape(6.dp))
-                                    .background(AppColors.Accent.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
-                            } else {
-                                Modifier.background(
-                                    when {
-                                        isHovered && !insertBefore -> AppColors.Accent.copy(alpha = 0.08f)
-                                        selectedSuiteId == suite.id -> AppColors.SidebarSelected
-                                        else -> Color.Transparent
+                            when {
+                                isDragging -> Modifier
+                                    .border(
+                                        1.5.dp,
+                                        AppColors.Accent.copy(alpha = 0.4f),
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .background(
+                                        AppColors.Accent.copy(alpha = 0.06f),
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                isNoteDropTarget -> Modifier
+                                    .border(2.dp, AppColors.Accent, RoundedCornerShape(8.dp))
+                                    .background(
+                                        AppColors.Accent.copy(alpha = 0.12f),
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                else -> Modifier.background(
+                                    if (selectedSuiteId == suite.id) {
+                                        AppColors.SidebarSelected
+                                    } else {
+                                        Color.Transparent
                                     },
-                                    RoundedCornerShape(4.dp)
+                                    RoundedCornerShape(6.dp)
                                 )
                             }
                         ),
@@ -495,34 +552,36 @@ fun SuiteTreeList(
                         modifier = Modifier
                             .onGloballyPositioned { coords ->
                                 val pos = coords.positionInRoot()
+                                handleCenterX = pos.x + coords.size.width / 2f
                                 handleCenterY = pos.y + coords.size.height / 2f
                             }
                             .pointerInput(suite.id) {
                                 detectDragGestures(
                                     onDragStart = {
-                                        draggedSuiteId = suite.id
-                                        dragAnchorY = handleCenterY
-                                        dragOffsetY = 0f
+                                        pointerX = handleCenterX
+                                        pointerY = handleCenterY
+                                        hoverTarget = null
+                                        onDragStart(suite.id, pointerX, pointerY)
                                     },
                                     onDragEnd = {
-                                        val drag = draggedSuiteId
                                         val target = hoverTarget
-                                        if (drag != null && target != null && drag != target.first) {
-                                            onMove(drag, target.first, target.second)
+                                        val dragId = suite.id
+                                        if (target != null && dragId != target.first) {
+                                            onMove(dragId, target.first, target.second)
                                         }
-                                        draggedSuiteId = null
                                         hoverTarget = null
-                                        dragOffsetY = 0f
+                                        onDragEnd()
                                     },
                                     onDragCancel = {
-                                        draggedSuiteId = null
                                         hoverTarget = null
-                                        dragOffsetY = 0f
+                                        onDragEnd()
                                     },
                                     onDrag = { change, dragAmount ->
                                         change.consume()
-                                        dragOffsetY += dragAmount.y
-                                        updateHover(dragAnchorY + dragOffsetY)
+                                        pointerX += dragAmount.x
+                                        pointerY += dragAmount.y
+                                        onDrag(pointerX, pointerY)
+                                        updateHover(pointerY)
                                     }
                                 )
                             }
@@ -536,23 +595,25 @@ fun SuiteTreeList(
                             onClick = { onSelect(suite.id) },
                             modifier = Modifier.fillMaxWidth(),
                             trailing = {
-                                Row {
-                                    NotionIconButton(onClick = { onRename(suite) }) {
-                                        Icon(
-                                            Icons.Default.Edit,
-                                            contentDescription = "Rename",
-                                            tint = AppColors.TextMuted,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                    if (suites.size > 1) {
-                                        NotionIconButton(onClick = { onDelete(suite) }) {
+                                if (!isDragging) {
+                                    Row {
+                                        NotionIconButton(onClick = { onRename(suite) }) {
                                             Icon(
-                                                Icons.Default.Delete,
-                                                contentDescription = "Delete",
+                                                Icons.Default.Edit,
+                                                contentDescription = "Rename",
                                                 tint = AppColors.TextMuted,
                                                 modifier = Modifier.size(16.dp)
                                             )
+                                        }
+                                        if (suites.size > 1) {
+                                            NotionIconButton(onClick = { onDelete(suite) }) {
+                                                Icon(
+                                                    Icons.Default.Delete,
+                                                    contentDescription = "Delete",
+                                                    tint = AppColors.TextMuted,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -560,7 +621,7 @@ fun SuiteTreeList(
                         )
                         if (isNoteDropTarget) {
                             Text(
-                                "↓ Move here",
+                                "↓ Move note here",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = AppColors.Accent,
@@ -571,9 +632,20 @@ fun SuiteTreeList(
                 }
 
                 if (isHovered && !isNoteDropTarget && !insertBefore) {
-                    DropLine(label = "here")
+                    InsertionLine()
                 }
             }
         }
     }
+}
+
+@Composable
+private fun InsertionLine() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 3.dp)
+            .height(3.dp)
+            .background(AppColors.Accent, RoundedCornerShape(2.dp))
+    )
 }
