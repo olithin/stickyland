@@ -75,6 +75,27 @@ jobs:
           echo "JAVA_HOME=$JAVA_HOME"
           ./gradlew packageDmg --no-daemon --stacktrace
 
+      # jpackage writes a Finder alias for Applications that only works on the
+      # build Mac. Replace it with a portable /Applications symlink.
+      - name: Fix Applications symlink in DMG
+        run: |
+          chmod +x scripts/fix-dmg-applications-link.sh
+          shopt -s nullglob
+          dmgs=(build/compose/binaries/main/dmg/*.dmg)
+          if [[ ${#dmgs[@]} -eq 0 ]]; then
+            echo "No DMG found to fix" >&2
+            exit 1
+          fi
+          ./scripts/fix-dmg-applications-link.sh "${dmgs[@]}"
+          # Verify the volume has a symlink, not a Finder alias.
+          VERIFY="$(mktemp -d)"
+          hdiutil attach "${dmgs[0]}" -nobrowse -readonly -mountpoint "$VERIFY/mnt" >/dev/null
+          ls -la "$VERIFY/mnt"
+          test -L "$VERIFY/mnt/Applications"
+          readlink "$VERIFY/mnt/Applications" | grep -qx '/Applications'
+          hdiutil detach "$VERIFY/mnt" -quiet
+          rm -rf "$VERIFY"
+
       - name: Rename DMG with architecture
         run: |
           shopt -s nullglob
