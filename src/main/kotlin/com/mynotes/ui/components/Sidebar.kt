@@ -1,32 +1,33 @@
 package com.mynotes.ui.components
 
+import androidx.compose.foundation.ContextMenuArea
+import androidx.compose.foundation.ContextMenuItem
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mynotes.data.NoteTree
 import com.mynotes.data.MainPanelMode
+import com.mynotes.data.NoteTree
 import com.mynotes.data.Suite
 import com.mynotes.ui.AppViewModel
 import com.mynotes.ui.theme.AppBrandHeader
 import com.mynotes.ui.theme.AppColors
 import com.mynotes.ui.theme.OlithinMark
 import java.time.format.DateTimeFormatter
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 
 @Composable
 fun Sidebar(
@@ -165,6 +166,7 @@ fun NoteListPanel(
     val treeItems = remember(state.notes, state.expandedNoteIds) {
         NoteTree.flatten(state.notes, state.expandedNoteIds)
     }
+    var noteToDelete by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     Column(
         modifier = modifier
@@ -176,15 +178,25 @@ fun NoteListPanel(
             SectionHeader("Search results")
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(state.searchResults, key = { it.first.id }) { (note, suite) ->
-                    SidebarItem(
-                        icon = "📄",
-                        title = note.title,
-                        selected = state.selectedNoteId == note.id,
-                        onClick = {
-                            viewModel.selectSuite(suite.id)
-                            viewModel.selectNote(note.id)
+                    ContextMenuArea(
+                        items = {
+                            listOf(
+                                ContextMenuItem("Delete") {
+                                    noteToDelete = note.id to note.title.ifBlank { "Untitled" }
+                                }
+                            )
                         }
-                    )
+                    ) {
+                        SidebarItem(
+                            icon = "📄",
+                            title = note.title,
+                            selected = state.selectedNoteId == note.id,
+                            onClick = {
+                                viewModel.selectSuite(suite.id)
+                                viewModel.selectNote(note.id)
+                            }
+                        )
+                    }
                 }
                 if (state.searchResults.isEmpty() && state.searchQuery.isNotBlank()) {
                     item {
@@ -225,7 +237,7 @@ fun NoteListPanel(
             }
 
             Text(
-                "Grab the ∷ handle — card follows the cursor",
+                "Right-click for options · drag ∷ to move",
                 fontSize = 11.sp,
                 color = AppColors.TextMuted,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -236,9 +248,22 @@ fun NoteListPanel(
                 treeItems = treeItems,
                 selectedNoteId = state.selectedNoteId,
                 dateFormatter = dateFormatter,
+                onRequestDelete = { id, title -> noteToDelete = id to title },
                 modifier = Modifier.weight(1f)
             )
         }
+    }
+
+    noteToDelete?.let { (id, title) ->
+        ConfirmDialog(
+            title = "Delete note?",
+            message = "Note \"$title\" will be permanently deleted.",
+            onConfirm = {
+                viewModel.deleteNote(id)
+                noteToDelete = null
+            },
+            onDismiss = { noteToDelete = null }
+        )
     }
 }
 

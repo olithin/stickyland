@@ -1,5 +1,7 @@
 package com.mynotes.ui.components
 
+import androidx.compose.foundation.ContextMenuArea
+import androidx.compose.foundation.ContextMenuItem
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -7,10 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.Icon
 import androidx.compose.material.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +45,7 @@ fun NoteTreeList(
     treeItems: List<NoteTreeItem>,
     selectedNoteId: String?,
     dateFormatter: DateTimeFormatter,
+    onRequestDelete: (noteId: String, title: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var draggedNoteId by remember { mutableStateOf<String?>(null) }
@@ -125,6 +125,7 @@ fun NoteTreeList(
                 onSelect = { viewModel.selectNote(note.id) },
                 onToggleExpand = { viewModel.toggleNoteExpanded(note.id) },
                 onCreateChild = { viewModel.createNote(parentId = note.id) },
+                onDelete = { onRequestDelete(note.id, note.title.ifBlank { "Untitled" }) },
                 onLayout = { top, bottom ->
                     rowLayouts = rowLayouts + (note.id to RowLayout(note.id, top, bottom))
                 },
@@ -177,6 +178,7 @@ private fun NoteTreeRow(
     onSelect: () -> Unit,
     onToggleExpand: () -> Unit,
     onCreateChild: () -> Unit,
+    onDelete: () -> Unit,
     onLayout: (top: Float, bottom: Float) -> Unit,
     onDragStart: (x: Float, y: Float) -> Unit,
     onDrag: (dx: Float, dy: Float) -> Unit,
@@ -187,113 +189,113 @@ private fun NoteTreeRow(
     var handleCenterX by remember { mutableFloatStateOf(0f) }
     var handleCenterY by remember { mutableFloatStateOf(0f) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = indent)
-            .alpha(if (isDragging) 0.35f else 1f)
-            .onGloballyPositioned { coords ->
-                val pos = coords.positionInRoot()
-                onLayout(pos.y, pos.y + coords.size.height)
-            }
-    ) {
-        if (dropZone == NoteDropZone.BEFORE) {
-            DropLine(label = "above")
+    ContextMenuArea(
+        items = {
+            listOf(
+                ContextMenuItem("New sub-note") { onCreateChild() },
+                ContextMenuItem("Delete") { onDelete() }
+            )
         }
-
-        Row(
+    ) {
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(
-                    if (dropZone == NoteDropZone.INSIDE) {
-                        Modifier
-                            .border(2.dp, AppColors.Accent, RoundedCornerShape(6.dp))
-                            .background(AppColors.Accent.copy(alpha = 0.10f), RoundedCornerShape(6.dp))
-                    } else {
-                        Modifier.background(
-                            if (selected) AppColors.SidebarSelected else Color.Transparent,
-                            RoundedCornerShape(4.dp)
-                        )
-                    }
-                )
-                .padding(vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(start = indent)
+                .alpha(if (isDragging) 0.35f else 1f)
+                .onGloballyPositioned { coords ->
+                    val pos = coords.positionInRoot()
+                    onLayout(pos.y, pos.y + coords.size.height)
+                }
         ) {
-            DragHandle(
-                active = isDragging,
+            if (dropZone == NoteDropZone.BEFORE) {
+                DropLine(label = "above")
+            }
+
+            Row(
                 modifier = Modifier
-                    .onGloballyPositioned { coords ->
-                        val pos = coords.positionInRoot()
-                        handleCenterX = pos.x + coords.size.width / 2f
-                        handleCenterY = pos.y + coords.size.height / 2f
-                    }
-                    .pointerInput(note.id) {
-                        detectDragGestures(
-                            onDragStart = { onDragStart(handleCenterX, handleCenterY) },
-                            onDragEnd = { onDragEnd() },
-                            onDragCancel = { onDragEnd() },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                onDrag(dragAmount.x, dragAmount.y)
-                            }
+                    .fillMaxWidth()
+                    .then(
+                        if (dropZone == NoteDropZone.INSIDE) {
+                            Modifier
+                                .border(2.dp, AppColors.Accent, RoundedCornerShape(6.dp))
+                                .background(AppColors.Accent.copy(alpha = 0.10f), RoundedCornerShape(6.dp))
+                        } else {
+                            Modifier.background(
+                                if (selected) AppColors.SidebarSelected else Color.Transparent,
+                                RoundedCornerShape(4.dp)
+                            )
+                        }
+                    )
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                DragHandle(
+                    active = isDragging,
+                    modifier = Modifier
+                        .onGloballyPositioned { coords ->
+                            val pos = coords.positionInRoot()
+                            handleCenterX = pos.x + coords.size.width / 2f
+                            handleCenterY = pos.y + coords.size.height / 2f
+                        }
+                        .pointerInput(note.id) {
+                            detectDragGestures(
+                                onDragStart = { onDragStart(handleCenterX, handleCenterY) },
+                                onDragEnd = { onDragEnd() },
+                                onDragCancel = { onDragEnd() },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    onDrag(dragAmount.x, dragAmount.y)
+                                }
+                            )
+                        }
+                )
+
+                if (item.hasChildren) {
+                    NotionIconButton(onClick = onToggleExpand) {
+                        Text(
+                            text = if (item.isExpanded) "▼" else "▶",
+                            fontSize = 12.sp,
+                            color = AppColors.TextMuted
                         )
                     }
-            )
-
-            if (item.hasChildren) {
-                NotionIconButton(onClick = onToggleExpand) {
-                    Text(
-                        text = if (item.isExpanded) "▼" else "▶",
-                        fontSize = 12.sp,
-                        color = AppColors.TextMuted
-                    )
-                }
-            } else {
-                Spacer(Modifier.width(32.dp))
-            }
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(vertical = 4.dp)
-            ) {
-                SidebarItem(
-                    icon = if (item.hasChildren) "📁" else "📄",
-                    title = note.title,
-                    selected = selected,
-                    onClick = onSelect,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (dropZone == NoteDropZone.INSIDE) {
-                    Text(
-                        "↳ nest inside",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = AppColors.Accent,
-                        modifier = Modifier.padding(start = 28.dp, bottom = 2.dp)
-                    )
                 } else {
-                    Text(
-                        note.createdAt.format(dateFormatter),
-                        fontSize = 11.sp,
-                        color = AppColors.TextMuted,
-                        modifier = Modifier.padding(start = 28.dp, bottom = 4.dp)
+                    Spacer(Modifier.width(32.dp))
+                }
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 4.dp)
+                ) {
+                    SidebarItem(
+                        icon = if (item.hasChildren) "📁" else "📄",
+                        title = note.title,
+                        selected = selected,
+                        onClick = onSelect,
+                        modifier = Modifier.fillMaxWidth()
                     )
+                    if (dropZone == NoteDropZone.INSIDE) {
+                        Text(
+                            "↳ nest inside",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = AppColors.Accent,
+                            modifier = Modifier.padding(start = 28.dp, bottom = 2.dp)
+                        )
+                    } else {
+                        Text(
+                            note.createdAt.format(dateFormatter),
+                            fontSize = 11.sp,
+                            color = AppColors.TextMuted,
+                            modifier = Modifier.padding(start = 28.dp, bottom = 4.dp)
+                        )
+                    }
                 }
             }
 
-            NotionIconButton(onClick = onCreateChild) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = "Sub-note",
-                    tint = AppColors.TextMuted,
-                    modifier = Modifier.size(16.dp)
-                )
+            if (dropZone == NoteDropZone.AFTER) {
+                DropLine(label = "below")
             }
-        }
-
-        if (dropZone == NoteDropZone.AFTER) {
-            DropLine(label = "below")
         }
     }
 }
@@ -511,122 +513,109 @@ fun SuiteTreeList(
                     InsertionLine()
                 }
 
-                // Keep the row composed while dragging so the gesture isn't cancelled;
-                // original stays dimmed (Fiori), floating ghost follows the cursor.
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .alpha(if (isDragging) 0.32f else 1f)
-                        .then(
-                            when {
-                                isDragging -> Modifier
-                                    .border(
-                                        1.5.dp,
-                                        AppColors.Accent.copy(alpha = 0.4f),
-                                        RoundedCornerShape(8.dp)
-                                    )
-                                    .background(
-                                        AppColors.Accent.copy(alpha = 0.06f),
-                                        RoundedCornerShape(8.dp)
-                                    )
-                                isNoteDropTarget -> Modifier
-                                    .border(2.dp, AppColors.Accent, RoundedCornerShape(8.dp))
-                                    .background(
-                                        AppColors.Accent.copy(alpha = 0.12f),
-                                        RoundedCornerShape(8.dp)
-                                    )
-                                else -> Modifier.background(
-                                    if (selectedSuiteId == suite.id) {
-                                        AppColors.SidebarSelected
-                                    } else {
-                                        Color.Transparent
-                                    },
-                                    RoundedCornerShape(6.dp)
-                                )
+                ContextMenuArea(
+                    items = {
+                        buildList {
+                            add(ContextMenuItem("Rename") { onRename(suite) })
+                            if (suites.size > 1) {
+                                add(ContextMenuItem("Delete") { onDelete(suite) })
                             }
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
+                        }
+                    }
                 ) {
-                    DragHandle(
-                        active = isDragging || isNoteDropTarget,
+                    // Keep the row composed while dragging so the gesture isn't cancelled;
+                    // original stays dimmed (Fiori), floating ghost follows the cursor.
+                    Row(
                         modifier = Modifier
-                            .onGloballyPositioned { coords ->
-                                val pos = coords.positionInRoot()
-                                handleCenterX = pos.x + coords.size.width / 2f
-                                handleCenterY = pos.y + coords.size.height / 2f
-                            }
-                            .pointerInput(suite.id) {
-                                detectDragGestures(
-                                    onDragStart = {
-                                        pointerX = handleCenterX
-                                        pointerY = handleCenterY
-                                        hoverTarget = null
-                                        onDragStart(suite.id, pointerX, pointerY)
-                                    },
-                                    onDragEnd = {
-                                        val target = hoverTarget
-                                        val dragId = suite.id
-                                        if (target != null && dragId != target.first) {
-                                            onMove(dragId, target.first, target.second)
+                            .fillMaxWidth()
+                            .alpha(if (isDragging) 0.32f else 1f)
+                            .then(
+                                when {
+                                    isDragging -> Modifier
+                                        .border(
+                                            1.5.dp,
+                                            AppColors.Accent.copy(alpha = 0.4f),
+                                            RoundedCornerShape(8.dp)
+                                        )
+                                        .background(
+                                            AppColors.Accent.copy(alpha = 0.06f),
+                                            RoundedCornerShape(8.dp)
+                                        )
+                                    isNoteDropTarget -> Modifier
+                                        .border(2.dp, AppColors.Accent, RoundedCornerShape(8.dp))
+                                        .background(
+                                            AppColors.Accent.copy(alpha = 0.12f),
+                                            RoundedCornerShape(8.dp)
+                                        )
+                                    else -> Modifier.background(
+                                        if (selectedSuiteId == suite.id) {
+                                            AppColors.SidebarSelected
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                        RoundedCornerShape(6.dp)
+                                    )
+                                }
+                            ),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        DragHandle(
+                            active = isDragging || isNoteDropTarget,
+                            modifier = Modifier
+                                .onGloballyPositioned { coords ->
+                                    val pos = coords.positionInRoot()
+                                    handleCenterX = pos.x + coords.size.width / 2f
+                                    handleCenterY = pos.y + coords.size.height / 2f
+                                }
+                                .pointerInput(suite.id) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            pointerX = handleCenterX
+                                            pointerY = handleCenterY
+                                            hoverTarget = null
+                                            onDragStart(suite.id, pointerX, pointerY)
+                                        },
+                                        onDragEnd = {
+                                            val target = hoverTarget
+                                            val dragId = suite.id
+                                            if (target != null && dragId != target.first) {
+                                                onMove(dragId, target.first, target.second)
+                                            }
+                                            hoverTarget = null
+                                            onDragEnd()
+                                        },
+                                        onDragCancel = {
+                                            hoverTarget = null
+                                            onDragEnd()
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            pointerX += dragAmount.x
+                                            pointerY += dragAmount.y
+                                            onDrag(pointerX, pointerY)
+                                            updateHover(pointerY)
                                         }
-                                        hoverTarget = null
-                                        onDragEnd()
-                                    },
-                                    onDragCancel = {
-                                        hoverTarget = null
-                                        onDragEnd()
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        pointerX += dragAmount.x
-                                        pointerY += dragAmount.y
-                                        onDrag(pointerX, pointerY)
-                                        updateHover(pointerY)
-                                    }
+                                    )
+                                }
+                        )
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            SidebarItem(
+                                icon = suite.icon,
+                                title = suite.name,
+                                selected = selectedSuiteId == suite.id || isNoteDropTarget,
+                                onClick = { onSelect(suite.id) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (isNoteDropTarget) {
+                                Text(
+                                    "↓ Move note here",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = AppColors.Accent,
+                                    modifier = Modifier.padding(start = 36.dp, bottom = 4.dp)
                                 )
                             }
-                    )
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        SidebarItem(
-                            icon = suite.icon,
-                            title = suite.name,
-                            selected = selectedSuiteId == suite.id || isNoteDropTarget,
-                            onClick = { onSelect(suite.id) },
-                            modifier = Modifier.fillMaxWidth(),
-                            trailing = {
-                                if (!isDragging) {
-                                    Row {
-                                        NotionIconButton(onClick = { onRename(suite) }) {
-                                            Icon(
-                                                Icons.Default.Edit,
-                                                contentDescription = "Rename",
-                                                tint = AppColors.TextMuted,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                        if (suites.size > 1) {
-                                            NotionIconButton(onClick = { onDelete(suite) }) {
-                                                Icon(
-                                                    Icons.Default.Delete,
-                                                    contentDescription = "Delete",
-                                                    tint = AppColors.TextMuted,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        )
-                        if (isNoteDropTarget) {
-                            Text(
-                                "↓ Move note here",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = AppColors.Accent,
-                                modifier = Modifier.padding(start = 36.dp, bottom = 4.dp)
-                            )
                         }
                     }
                 }

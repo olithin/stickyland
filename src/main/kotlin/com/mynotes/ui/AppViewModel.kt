@@ -680,15 +680,20 @@ class AppViewModel(
 
     fun deleteCurrentNote() {
         val noteId = state.selectedNoteId ?: return
+        deleteNote(noteId)
+    }
+
+    fun deleteNote(noteId: String) {
         val suiteId = state.selectedSuiteId ?: return
         scope.launch {
             repository.deleteNote(noteId)
             val notes = repository.getNotesBySuite(suiteId)
+            val wasSelected = state.selectedNoteId == noteId
             updateState {
                 it.copy(
                     notes = notes,
-                    selectedNoteId = null,
-                    currentNote = null,
+                    selectedNoteId = if (wasSelected) null else it.selectedNoteId,
+                    currentNote = if (wasSelected) null else it.currentNote,
                     statusMessage = "Note deleted"
                 )
             }

@@ -100,6 +100,13 @@ fun NoteEditor(
         return viewModel.pasteImageFromClipboard(targetIndex, cursor)
     }
 
+    ContextMenuArea(
+        items = {
+            listOf(
+                ContextMenuItem("Delete note") { showDeleteConfirm = true }
+            )
+        }
+    ) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -114,31 +121,19 @@ fun NoteEditor(
             .padding(horizontal = 48.dp, vertical = 32.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
+        Column {
+            Text(
+                "Created: ${note.createdAt.format(viewModel.dateFormatter)}",
+                fontSize = 12.sp,
+                color = AppColors.TextMuted
+            )
+            if (note.updatedAt != note.createdAt) {
                 Text(
-                    "Created: ${note.createdAt.format(viewModel.dateFormatter)}",
+                    "Modified: ${note.updatedAt.format(viewModel.dateFormatter)}",
                     fontSize = 12.sp,
                     color = AppColors.TextMuted
                 )
-                if (note.updatedAt != note.createdAt) {
-                    Text(
-                        "Modified: ${note.updatedAt.format(viewModel.dateFormatter)}",
-                        fontSize = 12.sp,
-                        color = AppColors.TextMuted
-                    )
-                }
             }
-            NotionButton(
-                text = "Delete",
-                onClick = { showDeleteConfirm = true },
-                backgroundColor = AppColors.Danger.copy(alpha = 0.1f),
-                contentColor = AppColors.Danger
-            )
         }
 
         Spacer(Modifier.height(24.dp))
@@ -225,6 +220,7 @@ fun NoteEditor(
             }
         }
     }
+    } // ContextMenuArea
 
     if (showDeleteConfirm) {
         ConfirmDialog(
