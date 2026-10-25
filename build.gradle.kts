@@ -31,10 +31,17 @@ dependencies {
     testImplementation(kotlin("test-junit5"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    // Compose Desktop UI tests (Playwright-equivalent for this stack — not a browser app).
+    testImplementation(compose.desktop.uiTestJUnit4)
+    testImplementation("junit:junit:4.13.2")
+    testRuntimeOnly("org.junit.vintage:junit-vintage-engine:5.11.4")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
 }
 
 tasks.test {
     useJUnitPlatform()
+    // Compose UI tests need a display; CI uses xvfb-run.
+    systemProperty("java.awt.headless", System.getProperty("java.awt.headless", "false"))
 }
 
 kotlin {

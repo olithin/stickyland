@@ -23,6 +23,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
@@ -32,6 +33,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.mynotes.data.NoteContentCodec
 import com.mynotes.ui.AppViewModel
+import com.mynotes.ui.TestTags
 import com.mynotes.ui.theme.AppColors
 import com.mynotes.ui.theme.OlithinMark
 import com.mynotes.util.ClipboardImage
@@ -110,6 +112,7 @@ fun NoteEditor(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .testTag(TestTags.NOTE_EDITOR)
             .onPreviewKeyEvent { event ->
                 // Notion-style: Cmd+V (Mac) / Ctrl+V (Windows) pastes screenshot into the note.
                 val isPaste =
@@ -149,7 +152,9 @@ fun NoteEditor(
                 fontWeight = FontWeight.Bold,
                 color = AppColors.TextPrimary
             ),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(TestTags.NOTE_TITLE),
             decorationBox = { inner ->
                 Box {
                     if (titleState.text.isEmpty()) {

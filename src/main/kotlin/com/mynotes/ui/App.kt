@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -55,6 +56,7 @@ fun App(viewModel: AppViewModel) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
+                    .testTag(TestTags.APP_ROOT)
                     .onGloballyPositioned { coords ->
                         val pos = coords.positionInRoot()
                         rootOffsetX = pos.x
