@@ -217,7 +217,7 @@ fun NoteListPanel(
             }
 
             Text(
-                "Drag ⠿ to reorder, nest, or drop onto a suite",
+                "Grab the ∷ handle — card follows the cursor",
                 fontSize = 11.sp,
                 color = AppColors.TextMuted,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
