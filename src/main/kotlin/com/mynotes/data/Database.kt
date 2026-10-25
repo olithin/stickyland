@@ -1,6 +1,7 @@
 package com.mynotes.data
 
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.File
 import java.nio.file.Files
@@ -9,25 +10,50 @@ import java.nio.file.StandardCopyOption
 object AppPaths {
     private const val DATA_DIR_ENV = "STICKYLAND_DATA_DIR"
     private const val DATA_FOLDER = "Stickyland"
+    private const val DATA_DIR_PROP = "stickyland.data.dir"
+
+    @Volatile
+    private var overrideDataDir: File? = null
+
+    private val defaultDataDir: File by lazy { resolveDataDir() }
 
     /** Root folder for notes.db and images/ */
-    val dataDir: File = resolveDataDir()
+    val dataDir: File
+        get() = overrideDataDir ?: defaultDataDir
 
-    val databaseFile: File = dataDir.resolve("notes.db")
-    val imagesDir: File = dataDir.resolve("images").also { it.mkdirs() }
+    val databaseFile: File
+        get() = dataDir.resolve("notes.db")
+
+    val imagesDir: File
+        get() = dataDir.resolve("images").also { it.mkdirs() }
 
     fun noteImagesDir(noteId: String): File =
         imagesDir.resolve(noteId).also { it.mkdirs() }
 
+    /**
+     * Points data (DB + images) at a temp folder for unit tests.
+     * Call before [DatabaseFactory.init].
+     */
+    fun redirectForTests(dir: File) {
+        dir.mkdirs()
+        overrideDataDir = dir
+        imagesDir.mkdirs()
+    }
+
+    fun clearTestRedirect() {
+        overrideDataDir = null
+    }
+
     private fun resolveDataDir(): File {
-        val dir = dataDirFromEnv() ?: defaultDataDirForOs()
+        val dir = dataDirFromConfig() ?: defaultDataDirForOs()
         ensureMigratedFromLegacy(dir)
         dir.mkdirs()
         return dir
     }
 
-    private fun dataDirFromEnv(): File? {
-        val custom = System.getenv(DATA_DIR_ENV)?.trim().orEmpty()
+    private fun dataDirFromConfig(): File? {
+        val custom = System.getProperty(DATA_DIR_PROP)?.trim().orEmpty()
+            .ifEmpty { System.getenv(DATA_DIR_ENV)?.trim().orEmpty() }
             .ifEmpty { System.getenv("MYNOTES_DATA_DIR")?.trim().orEmpty() }
         if (custom.isEmpty()) return null
         return File(custom)
@@ -106,7 +132,8 @@ object AppPaths {
 object DatabaseFactory {
     fun init() {
         val url = "jdbc:sqlite:${AppPaths.databaseFile.absolutePath}"
-        Database.connect(url, driver = "org.sqlite.JDBC")
+        val db = Database.connect(url, driver = "org.sqlite.JDBC")
+        TransactionManager.defaultDatabase = db
         transaction {
             SchemaUtils.createMissingTablesAndColumns(
                 SuitesTable,
