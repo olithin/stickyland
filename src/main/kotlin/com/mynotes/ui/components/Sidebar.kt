@@ -85,10 +85,12 @@ fun Sidebar(
         SuiteTreeList(
             suites = state.suites,
             selectedSuiteId = if (state.isSearching) null else state.selectedSuiteId,
+            noteDragHoverSuiteId = state.noteDragHoverSuiteId,
             onSelect = viewModel::selectSuite,
             onRename = { suiteToRename = it },
             onDelete = { suiteToDelete = it },
             onMove = viewModel::moveSuite,
+            onRegisterDropTarget = viewModel::registerSuiteDropTarget,
             modifier = Modifier.weight(1f)
         )
 
@@ -215,7 +217,7 @@ fun NoteListPanel(
             }
 
             Text(
-                "Hold ⠿ and drag to reorder or nest notes",
+                "Drag ⠿ to reorder, nest, or drop onto a suite",
                 fontSize = 11.sp,
                 color = AppColors.TextMuted,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)

@@ -10,6 +10,16 @@ import java.io.File
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+data class DropRect(
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float
+) {
+    fun contains(x: Float, y: Float): Boolean =
+        x in left..right && y in top..bottom
+}
+
 data class AppUiState(
     val suites: List<Suite> = emptyList(),
     val selectedSuiteId: String? = null,
@@ -29,7 +39,11 @@ data class AppUiState(
     val linkFromNodeId: String? = null,
     val schemaPanX: Float = 0f,
     val schemaPanY: Float = 0f,
-    val schemaZoom: Float = 1f
+    val schemaZoom: Float = 1f,
+    /** Note currently being dragged (for cross-suite drop highlighting). */
+    val draggingNoteId: String? = null,
+    /** Suite under the pointer while a note is dragged. */
+    val noteDragHoverSuiteId: String? = null
 )
 
 class AppViewModel(
@@ -42,8 +56,39 @@ class AppViewModel(
 
     private var saveJob: Job? = null
 
+    /** Suite row bounds in root coordinates — used while dragging a note across panels. */
+    private val suiteDropTargets = mutableMapOf<String, DropRect>()
+
     val dateFormatter: DateTimeFormatter =
         DateTimeFormatter.ofPattern("MMMM d, yyyy, HH:mm", Locale.ENGLISH)
+
+    fun registerSuiteDropTarget(suiteId: String, rect: DropRect) {
+        suiteDropTargets[suiteId] = rect
+    }
+
+    fun unregisterSuiteDropTarget(suiteId: String) {
+        suiteDropTargets.remove(suiteId)
+    }
+
+    fun beginNoteDrag(noteId: String) {
+        updateState { it.copy(draggingNoteId = noteId, noteDragHoverSuiteId = null) }
+    }
+
+    fun updateNoteDragPointer(x: Float, y: Float) {
+        if (state.draggingNoteId == null) return
+        val hit = suiteDropTargets.entries
+            .firstOrNull { (id, rect) -> id != state.selectedSuiteId && rect.contains(x, y) }
+            ?.key
+        if (hit != state.noteDragHoverSuiteId) {
+            updateState { it.copy(noteDragHoverSuiteId = hit) }
+        }
+    }
+
+    fun clearNoteDrag() {
+        if (state.draggingNoteId != null || state.noteDragHoverSuiteId != null) {
+            updateState { it.copy(draggingNoteId = null, noteDragHoverSuiteId = null) }
+        }
+    }
 
     fun loadInitialData() {
         val defaultSuite = repository.ensureDefaultSuite()
@@ -455,6 +500,37 @@ class AppViewModel(
                 it.copy(notes = notes, expandedNoteIds = expanded, statusMessage = "Order updated")
             }
         }
+    }
+
+    /**
+     * Drops a dragged note onto a suite in the sidebar (cross-topic move).
+     * Returns true if the drop was handled so the note list can skip in-list reorder.
+     */
+    fun dropNoteOnSuite(noteId: String, targetSuiteId: String): Boolean {
+        if (targetSuiteId == state.selectedSuiteId) return false
+        val suiteName = state.suites.find { it.id == targetSuiteId }?.name ?: "suite"
+        scope.launch {
+            repository.moveNoteToSuite(noteId, targetSuiteId)
+            val currentSuiteId = state.selectedSuiteId
+            val notes = if (currentSuiteId != null) {
+                repository.getNotesBySuite(currentSuiteId)
+            } else {
+                emptyList()
+            }
+            val keepSelection = state.selectedNoteId != null &&
+                notes.any { it.id == state.selectedNoteId }
+            updateState {
+                it.copy(
+                    notes = notes,
+                    selectedNoteId = if (keepSelection) it.selectedNoteId else null,
+                    currentNote = if (keepSelection) it.currentNote else null,
+                    draggingNoteId = null,
+                    noteDragHoverSuiteId = null,
+                    statusMessage = "Moved to \"$suiteName\""
+                )
+            }
+        }
+        return true
     }
 
     fun moveSuite(draggedId: String, targetId: String, insertBefore: Boolean) {

@@ -342,6 +342,58 @@ class NotesRepository {
         }
     }
 
+    /**
+     * Moves a note (and its whole subtree) into another suite as a top-level note.
+     * Parent nesting inside the moved subtree is preserved.
+     */
+    fun moveNoteToSuite(noteId: String, targetSuiteId: String) {
+        transaction {
+            val suiteExists = SuitesTable.select { SuitesTable.id eq targetSuiteId }.count() > 0
+            if (!suiteExists) return@transaction
+
+            val allNotes = NotesTable.selectAll().map { rowToNote(it) }
+            val dragged = allNotes.firstOrNull { it.id == noteId } ?: return@transaction
+            if (dragged.suiteId == targetSuiteId) return@transaction
+
+            fun collectSubtree(id: String): List<String> {
+                val children = allNotes.filter { it.parentId == id }.map { it.id }
+                return listOf(id) + children.flatMap { collectSubtree(it) }
+            }
+
+            val subtreeIds = collectSubtree(noteId)
+            val oldSuiteId = dragged.suiteId
+            val oldParentId = dragged.parentId
+            val now = LocalDateTime.now()
+
+            val targetRootCount = NotesTable.select {
+                (NotesTable.suiteId eq targetSuiteId) and (NotesTable.parentId eq null)
+            }.count().toInt()
+
+            NotesTable.update({ NotesTable.id eq noteId }) {
+                it[suiteId] = targetSuiteId
+                it[parentId] = null
+                it[sortOrder] = targetRootCount
+                it[updatedAt] = now
+            }
+
+            subtreeIds.filter { it != noteId }.forEach { id ->
+                NotesTable.update({ NotesTable.id eq id }) {
+                    it[suiteId] = targetSuiteId
+                    it[updatedAt] = now
+                }
+            }
+
+            val oldSiblings = allNotes
+                .filter { it.suiteId == oldSuiteId && it.parentId == oldParentId && it.id !in subtreeIds }
+                .sortedBy { it.sortOrder }
+            oldSiblings.forEachIndexed { index, note ->
+                NotesTable.update({ NotesTable.id eq note.id }) {
+                    it[sortOrder] = index
+                }
+            }
+        }
+    }
+
     fun moveSuite(suiteId: String, targetSuiteId: String, insertBefore: Boolean) {
         transaction {
             val suites = SuitesTable.selectAll()

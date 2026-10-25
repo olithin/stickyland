@@ -1,7 +1,7 @@
 package com.mynotes.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import com.mynotes.data.NoteDropZone
 import com.mynotes.data.NoteTreeItem
 import com.mynotes.ui.AppViewModel
+import com.mynotes.ui.DropRect
 import com.mynotes.ui.theme.AppColors
 import java.time.format.DateTimeFormatter
 
@@ -43,15 +44,15 @@ fun NoteTreeList(
     var draggedNoteId by remember { mutableStateOf<String?>(null) }
     var rowLayouts by remember { mutableStateOf<Map<String, RowLayout>>(emptyMap()) }
     var hoverTarget by remember { mutableStateOf<Pair<String, NoteDropZone>?>(null) }
-    var dragAnchorY by remember { mutableFloatStateOf(0f) }
-    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var pointerX by remember { mutableFloatStateOf(0f) }
+    var pointerY by remember { mutableFloatStateOf(0f) }
 
-    fun updateHover(pointerY: Float) {
+    fun updateNoteHover(y: Float) {
         val match = rowLayouts.entries.firstOrNull { (_, layout) ->
-            pointerY in layout.top..layout.bottom
+            y in layout.top..layout.bottom
         }
         hoverTarget = match?.let { (id, layout) ->
-            val relativeY = pointerY - layout.top
+            val relativeY = y - layout.top
             val height = (layout.bottom - layout.top).coerceAtLeast(1f)
             val zone = when {
                 relativeY < height * 0.25f -> NoteDropZone.BEFORE
@@ -93,7 +94,9 @@ fun NoteTreeList(
         items(treeItems, key = { it.note.id }) { item ->
             val note = item.note
             val isDragging = draggedNoteId == note.id
-            val isHovered = hoverTarget?.first == note.id
+            // Prefer suite drop highlight when pointer is over another topic.
+            val suiteHover = viewModel.state.noteDragHoverSuiteId
+            val isHovered = suiteHover == null && hoverTarget?.first == note.id
             val dropZone = if (isHovered) hoverTarget?.second else null
 
             NoteTreeRow(
@@ -108,24 +111,40 @@ fun NoteTreeList(
                 onLayout = { top, bottom ->
                     rowLayouts = rowLayouts + (note.id to RowLayout(note.id, top, bottom))
                 },
-                onDragStart = { anchorY ->
+                onDragStart = { x, y ->
                     draggedNoteId = note.id
-                    dragAnchorY = anchorY
-                    dragOffsetY = 0f
+                    pointerX = x
+                    pointerY = y
+                    viewModel.beginNoteDrag(note.id)
+                    updateNoteHover(y)
                 },
-                onDrag = { deltaY ->
-                    dragOffsetY += deltaY
-                    updateHover(dragAnchorY + dragOffsetY)
+                onDrag = { dx, dy ->
+                    pointerX += dx
+                    pointerY += dy
+                    viewModel.updateNoteDragPointer(pointerX, pointerY)
+                    // Only show in-list zones when not over another suite.
+                    if (viewModel.state.noteDragHoverSuiteId == null) {
+                        updateNoteHover(pointerY)
+                    } else {
+                        hoverTarget = null
+                    }
                 },
                 onDragEnd = {
                     val dragId = draggedNoteId
+                    val targetSuiteId = viewModel.state.noteDragHoverSuiteId
                     val target = hoverTarget
-                    if (dragId != null && target != null && dragId != target.first) {
-                        viewModel.moveNote(dragId, target.first, target.second)
+                    when {
+                        dragId != null && targetSuiteId != null -> {
+                            viewModel.dropNoteOnSuite(dragId, targetSuiteId)
+                        }
+                        dragId != null && target != null && dragId != target.first -> {
+                            viewModel.moveNote(dragId, target.first, target.second)
+                            viewModel.clearNoteDrag()
+                        }
+                        else -> viewModel.clearNoteDrag()
                     }
                     draggedNoteId = null
                     hoverTarget = null
-                    dragOffsetY = 0f
                 }
             )
         }
@@ -143,12 +162,13 @@ private fun NoteTreeRow(
     onToggleExpand: () -> Unit,
     onCreateChild: () -> Unit,
     onLayout: (top: Float, bottom: Float) -> Unit,
-    onDragStart: (anchorY: Float) -> Unit,
-    onDrag: (deltaY: Float) -> Unit,
+    onDragStart: (x: Float, y: Float) -> Unit,
+    onDrag: (dx: Float, dy: Float) -> Unit,
     onDragEnd: () -> Unit
 ) {
     val note = item.note
     val indent = (item.depth * 16).dp
+    var handleCenterX by remember { mutableFloatStateOf(0f) }
     var handleCenterY by remember { mutableFloatStateOf(0f) }
 
     Column(
@@ -183,16 +203,17 @@ private fun NoteTreeRow(
                     .size(28.dp)
                     .onGloballyPositioned { coords ->
                         val pos = coords.positionInRoot()
+                        handleCenterX = pos.x + coords.size.width / 2f
                         handleCenterY = pos.y + coords.size.height / 2f
                     }
                     .pointerInput(note.id) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = { onDragStart(handleCenterY) },
+                        detectDragGestures(
+                            onDragStart = { onDragStart(handleCenterX, handleCenterY) },
                             onDragEnd = { onDragEnd() },
                             onDragCancel = { onDragEnd() },
                             onDrag = { change, dragAmount ->
                                 change.consume()
-                                onDrag(dragAmount.y)
+                                onDrag(dragAmount.x, dragAmount.y)
                             }
                         )
                     },
@@ -268,10 +289,12 @@ private fun DropIndicator() {
 fun SuiteTreeList(
     suites: List<com.mynotes.data.Suite>,
     selectedSuiteId: String?,
+    noteDragHoverSuiteId: String?,
     onSelect: (String) -> Unit,
     onRename: (com.mynotes.data.Suite) -> Unit,
     onDelete: (com.mynotes.data.Suite) -> Unit,
     onMove: (draggedId: String, targetId: String, insertBefore: Boolean) -> Unit,
+    onRegisterDropTarget: (suiteId: String, rect: DropRect) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var draggedSuiteId by remember { mutableStateOf<String?>(null) }
@@ -298,6 +321,7 @@ fun SuiteTreeList(
     ) {
         items(suites, key = { it.id }) { suite ->
             val isDragging = draggedSuiteId == suite.id
+            val isNoteDropTarget = noteDragHoverSuiteId == suite.id
             val isHovered = hoverTarget?.first == suite.id
             val insertBefore = hoverTarget?.second ?: true
             var handleCenterY by remember { mutableFloatStateOf(0f) }
@@ -307,16 +331,22 @@ fun SuiteTreeList(
                     .fillMaxWidth()
                     .onGloballyPositioned { coords ->
                         val pos = coords.positionInRoot()
-                        rowLayouts = rowLayouts + (suite.id to RowLayout(suite.id, pos.y, pos.y + coords.size.height))
+                        val left = pos.x
+                        val top = pos.y
+                        val right = pos.x + coords.size.width
+                        val bottom = pos.y + coords.size.height
+                        rowLayouts = rowLayouts + (suite.id to RowLayout(suite.id, top, bottom))
+                        onRegisterDropTarget(suite.id, DropRect(left, top, right, bottom))
                     }
             ) {
-                if (isHovered && insertBefore) DropIndicator()
+                if (isHovered && !isNoteDropTarget && insertBefore) DropIndicator()
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
                             when {
+                                isNoteDropTarget -> AppColors.Accent.copy(alpha = 0.18f)
                                 isHovered && !insertBefore -> AppColors.Accent.copy(alpha = 0.08f)
                                 selectedSuiteId == suite.id -> AppColors.SidebarSelected
                                 else -> Color.Transparent
@@ -333,7 +363,7 @@ fun SuiteTreeList(
                                 handleCenterY = pos.y + coords.size.height / 2f
                             }
                             .pointerInput(suite.id) {
-                                detectDragGesturesAfterLongPress(
+                                detectDragGestures(
                                     onDragStart = {
                                         draggedSuiteId = suite.id
                                         dragAnchorY = handleCenterY
@@ -366,14 +396,14 @@ fun SuiteTreeList(
                         Text(
                             text = "⠿",
                             fontSize = 14.sp,
-                            color = if (isDragging) AppColors.Accent else AppColors.TextMuted
+                            color = if (isDragging || isNoteDropTarget) AppColors.Accent else AppColors.TextMuted
                         )
                     }
 
                     SidebarItem(
                         icon = suite.icon,
                         title = suite.name,
-                        selected = selectedSuiteId == suite.id,
+                        selected = selectedSuiteId == suite.id || isNoteDropTarget,
                         onClick = { onSelect(suite.id) },
                         modifier = Modifier.weight(1f),
                         trailing = {
@@ -401,7 +431,7 @@ fun SuiteTreeList(
                     )
                 }
 
-                if (isHovered && !insertBefore) DropIndicator()
+                if (isHovered && !isNoteDropTarget && !insertBefore) DropIndicator()
             }
         }
     }
