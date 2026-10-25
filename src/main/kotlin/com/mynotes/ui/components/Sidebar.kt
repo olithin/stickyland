@@ -82,16 +82,15 @@ fun Sidebar(
 
         SectionHeader("Suites")
 
-        Box(modifier = Modifier.weight(1f)) {
-            SuiteTreeList(
-                suites = state.suites,
-                selectedSuiteId = if (state.isSearching) null else state.selectedSuiteId,
-                onSelect = viewModel::selectSuite,
-                onRename = { suiteToRename = it },
-                onDelete = { suiteToDelete = it },
-                onMove = viewModel::moveSuite
-            )
-        }
+        SuiteTreeList(
+            suites = state.suites,
+            selectedSuiteId = if (state.isSearching) null else state.selectedSuiteId,
+            onSelect = viewModel::selectSuite,
+            onRename = { suiteToRename = it },
+            onDelete = { suiteToDelete = it },
+            onMove = viewModel::moveSuite,
+            modifier = Modifier.weight(1f)
+        )
 
         NotionButton(
             text = "+ New suite",
