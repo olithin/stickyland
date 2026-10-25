@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,6 +25,7 @@ import com.mynotes.data.MainPanelMode
 import com.mynotes.data.NoteTree
 import com.mynotes.data.Suite
 import com.mynotes.ui.AppViewModel
+import com.mynotes.ui.TestTags
 import com.mynotes.ui.theme.AppBrandHeader
 import com.mynotes.ui.theme.AppColors
 import com.mynotes.ui.theme.OlithinMark
@@ -65,13 +67,13 @@ fun Sidebar(
                 label = "Notes",
                 selected = state.mainPanelMode == MainPanelMode.NOTES,
                 onClick = { viewModel.setMainPanelMode(MainPanelMode.NOTES) },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).testTag(TestTags.MODE_NOTES)
             )
             ModeChip(
                 label = "Schema",
                 selected = state.mainPanelMode == MainPanelMode.SCHEMA,
                 onClick = { viewModel.setMainPanelMode(MainPanelMode.SCHEMA) },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).testTag(TestTags.MODE_SCHEMA)
             )
         }
 
@@ -106,7 +108,10 @@ fun Sidebar(
         NotionButton(
             text = "+ New suite",
             onClick = { showCreateSuite = true },
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
+                .testTag(TestTags.BTN_NEW_SUITE),
             backgroundColor = AppColors.SidebarSelected,
             contentColor = AppColors.TextPrimary
         )
@@ -231,7 +236,10 @@ fun NoteListPanel(
                         color = AppColors.TextMuted
                     )
                 }
-                NotionIconButton(onClick = { viewModel.createNote() }) {
+                NotionIconButton(
+                    onClick = { viewModel.createNote() },
+                    modifier = Modifier.testTag(TestTags.BTN_NEW_NOTE)
+                ) {
                     Icon(Icons.Default.Add, "New note", tint = AppColors.Accent)
                 }
             }
@@ -249,7 +257,7 @@ fun NoteListPanel(
                 selectedNoteId = state.selectedNoteId,
                 dateFormatter = dateFormatter,
                 onRequestDelete = { id, title -> noteToDelete = id to title },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).testTag(TestTags.NOTE_LIST)
             )
         }
     }

@@ -34,6 +34,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -44,6 +45,7 @@ import com.mynotes.data.SchemaEdge
 import com.mynotes.data.SchemaNode
 import com.mynotes.data.SchemaPort
 import com.mynotes.ui.AppViewModel
+import com.mynotes.ui.TestTags
 import com.mynotes.ui.theme.AppColors
 import com.mynotes.ui.theme.Brand
 import com.mynotes.ui.theme.OlithinMark
@@ -71,7 +73,11 @@ fun SchemaPanel(
     var showRebuildConfirm by remember { mutableStateOf(false) }
     var editingTitleId by remember { mutableStateOf<String?>(null) }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(TestTags.SCHEMA_PANEL)
+    ) {
         SchemaToolbar(
             hasSelection = state.selectedSchemaNodeId != null || state.selectedSchemaEdgeId != null,
             edgeSelected = state.selectedSchemaEdgeId != null,

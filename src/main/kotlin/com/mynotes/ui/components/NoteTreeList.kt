@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -30,6 +31,7 @@ import com.mynotes.data.NoteDropZone
 import com.mynotes.data.NoteTreeItem
 import com.mynotes.ui.AppViewModel
 import com.mynotes.ui.DropRect
+import com.mynotes.ui.TestTags
 import com.mynotes.ui.theme.AppColors
 import java.time.format.DateTimeFormatter
 
@@ -202,6 +204,7 @@ private fun NoteTreeRow(
                 .fillMaxWidth()
                 .padding(start = indent)
                 .alpha(if (isDragging) 0.35f else 1f)
+                .testTag(TestTags.note(note.id))
                 .onGloballyPositioned { coords ->
                     val pos = coords.positionInRoot()
                     onLayout(pos.y, pos.y + coords.size.height)
@@ -529,6 +532,7 @@ fun SuiteTreeList(
                         modifier = Modifier
                             .fillMaxWidth()
                             .alpha(if (isDragging) 0.32f else 1f)
+                            .testTag(TestTags.suite(suite.id))
                             .then(
                                 when {
                                     isDragging -> Modifier

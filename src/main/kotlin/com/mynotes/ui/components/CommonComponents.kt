@@ -15,9 +15,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mynotes.ui.TestTags
 import com.mynotes.ui.theme.AppColors
 
 @Composable
@@ -86,12 +88,18 @@ fun ConfirmDialog(
         title = { Text(title, fontWeight = FontWeight.SemiBold) },
         text = { Text(message) },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
+            TextButton(
+                onClick = onConfirm,
+                modifier = Modifier.testTag(TestTags.DIALOG_CONFIRM)
+            ) {
                 Text(confirmText, color = AppColors.Danger)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag(TestTags.DIALOG_CANCEL)
+            ) {
                 Text("Cancel")
             }
         },
@@ -121,7 +129,9 @@ fun InputDialog(
                 onValueChange = { value = it },
                 placeholder = { Text(placeholder) },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(TestTags.DIALOG_INPUT),
                 colors = TextFieldDefaults.outlinedTextFieldColors(
                     focusedBorderColor = AppColors.Accent,
                     unfocusedBorderColor = AppColors.Border
@@ -131,13 +141,17 @@ fun InputDialog(
         confirmButton = {
             TextButton(
                 onClick = { onConfirm(value) },
-                enabled = allowBlank || value.isNotBlank()
+                enabled = allowBlank || value.isNotBlank(),
+                modifier = Modifier.testTag(TestTags.DIALOG_CONFIRM)
             ) {
                 Text(confirmText, color = AppColors.Accent)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag(TestTags.DIALOG_CANCEL)
+            ) {
                 Text("Cancel")
             }
         },
@@ -200,7 +214,8 @@ fun SearchField(
         onValueChange = onQueryChange,
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp),
+            .height(52.dp)
+            .testTag(TestTags.SEARCH_FIELD),
         placeholder = { Text(placeholder, color = AppColors.TextMuted, fontSize = 14.sp) },
         singleLine = true,
         colors = TextFieldDefaults.outlinedTextFieldColors(
