@@ -3,9 +3,9 @@ package com.mynotes.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -61,33 +62,35 @@ fun NoteTreeList(
         }
     }
 
-    Column(
+    LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .clipToBounds()
             .padding(vertical = 4.dp)
     ) {
         if (treeItems.isEmpty()) {
-            Column(
-                modifier = Modifier.padding(24.dp).fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("📄", fontSize = 32.sp)
-                Text(
-                    "No notes",
-                    modifier = Modifier.padding(top = 8.dp),
-                    color = AppColors.TextMuted,
-                    fontSize = 14.sp
-                )
-                NotionTextButton(
-                    text = "Create first note",
-                    onClick = { viewModel.createNote() },
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+            item(key = "empty-notes") {
+                Column(
+                    modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("📄", fontSize = 32.sp)
+                    Text(
+                        "No notes",
+                        modifier = Modifier.padding(top = 8.dp),
+                        color = AppColors.TextMuted,
+                        fontSize = 14.sp
+                    )
+                    NotionTextButton(
+                        text = "Create first note",
+                        onClick = { viewModel.createNote() },
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
         }
 
-        treeItems.forEach { item ->
+        items(treeItems, key = { it.note.id }) { item ->
             val note = item.note
             val isDragging = draggedNoteId == note.id
             val isHovered = hoverTarget?.first == note.id
@@ -288,8 +291,12 @@ fun SuiteTreeList(
         }
     }
 
-    Column(modifier = modifier) {
-        suites.forEach { suite ->
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .clipToBounds()
+    ) {
+        items(suites, key = { it.id }) { suite ->
             val isDragging = draggedSuiteId == suite.id
             val isHovered = hoverTarget?.first == suite.id
             val insertBefore = hoverTarget?.second ?: true
