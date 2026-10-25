@@ -42,8 +42,11 @@ data class AppUiState(
     val schemaZoom: Float = 1f,
     /** Note currently being dragged (for cross-suite drop highlighting). */
     val draggingNoteId: String? = null,
+    val draggingNoteTitle: String? = null,
     /** Suite under the pointer while a note is dragged. */
-    val noteDragHoverSuiteId: String? = null
+    val noteDragHoverSuiteId: String? = null,
+    /** Human-readable drop target, shown on the drag ghost. */
+    val noteDragHint: String? = null
 )
 
 class AppViewModel(
@@ -52,6 +55,12 @@ class AppViewModel(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     var state by mutableStateOf(AppUiState())
+        private set
+
+    /** Pointer for the floating drag ghost (updated every move, outside AppUiState). */
+    var dragPointerX by mutableStateOf(0f)
+        private set
+    var dragPointerY by mutableStateOf(0f)
         private set
 
     private var saveJob: Job? = null
@@ -71,22 +80,52 @@ class AppViewModel(
     }
 
     fun beginNoteDrag(noteId: String) {
-        updateState { it.copy(draggingNoteId = noteId, noteDragHoverSuiteId = null) }
+        val title = state.notes.find { it.id == noteId }?.title?.ifBlank { "Untitled" } ?: "Note"
+        updateState {
+            it.copy(
+                draggingNoteId = noteId,
+                draggingNoteTitle = title,
+                noteDragHoverSuiteId = null,
+                noteDragHint = "Drag to reorder, nest, or onto a suite"
+            )
+        }
     }
 
     fun updateNoteDragPointer(x: Float, y: Float) {
         if (state.draggingNoteId == null) return
+        dragPointerX = x
+        dragPointerY = y
         val hit = suiteDropTargets.entries
             .firstOrNull { (id, rect) -> id != state.selectedSuiteId && rect.contains(x, y) }
             ?.key
         if (hit != state.noteDragHoverSuiteId) {
-            updateState { it.copy(noteDragHoverSuiteId = hit) }
+            val suiteName = hit?.let { id -> state.suites.find { it.id == id }?.name }
+            updateState {
+                it.copy(
+                    noteDragHoverSuiteId = hit,
+                    noteDragHint = if (suiteName != null) "Move to «$suiteName»" else it.noteDragHint
+                )
+            }
+        }
+    }
+
+    fun setNoteDragHint(hint: String?) {
+        if (state.draggingNoteId == null) return
+        if (hint != state.noteDragHint) {
+            updateState { it.copy(noteDragHint = hint) }
         }
     }
 
     fun clearNoteDrag() {
-        if (state.draggingNoteId != null || state.noteDragHoverSuiteId != null) {
-            updateState { it.copy(draggingNoteId = null, noteDragHoverSuiteId = null) }
+        if (state.draggingNoteId != null || state.noteDragHoverSuiteId != null || state.noteDragHint != null) {
+            updateState {
+                it.copy(
+                    draggingNoteId = null,
+                    draggingNoteTitle = null,
+                    noteDragHoverSuiteId = null,
+                    noteDragHint = null
+                )
+            }
         }
     }
 
@@ -525,7 +564,9 @@ class AppViewModel(
                     selectedNoteId = if (keepSelection) it.selectedNoteId else null,
                     currentNote = if (keepSelection) it.currentNote else null,
                     draggingNoteId = null,
+                    draggingNoteTitle = null,
                     noteDragHoverSuiteId = null,
+                    noteDragHint = null,
                     statusMessage = "Moved to \"$suiteName\""
                 )
             }

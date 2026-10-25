@@ -1,6 +1,7 @@
 package com.mynotes.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,11 +14,15 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mynotes.data.NoteDropZone
@@ -47,20 +52,31 @@ fun NoteTreeList(
     var pointerX by remember { mutableFloatStateOf(0f) }
     var pointerY by remember { mutableFloatStateOf(0f) }
 
+    fun titleOf(id: String): String =
+        treeItems.firstOrNull { it.note.id == id }?.note?.title?.ifBlank { "Untitled" } ?: "note"
+
     fun updateNoteHover(y: Float) {
-        val match = rowLayouts.entries.firstOrNull { (_, layout) ->
-            y in layout.top..layout.bottom
+        val match = rowLayouts.entries.firstOrNull { (id, layout) ->
+            id != draggedNoteId && y in layout.top..layout.bottom
         }
         hoverTarget = match?.let { (id, layout) ->
             val relativeY = y - layout.top
             val height = (layout.bottom - layout.top).coerceAtLeast(1f)
             val zone = when {
-                relativeY < height * 0.25f -> NoteDropZone.BEFORE
-                relativeY > height * 0.75f -> NoteDropZone.AFTER
+                relativeY < height * 0.28f -> NoteDropZone.BEFORE
+                relativeY > height * 0.72f -> NoteDropZone.AFTER
                 else -> NoteDropZone.INSIDE
             }
             id to zone
         }
+        val target = hoverTarget
+        val hint = when {
+            target == null -> "Drop to reorder"
+            target.second == NoteDropZone.BEFORE -> "Place above «${titleOf(target.first)}»"
+            target.second == NoteDropZone.AFTER -> "Place below «${titleOf(target.first)}»"
+            else -> "Nest inside «${titleOf(target.first)}»"
+        }
+        viewModel.setNoteDragHint(hint)
     }
 
     LazyColumn(
@@ -94,7 +110,6 @@ fun NoteTreeList(
         items(treeItems, key = { it.note.id }) { item ->
             val note = item.note
             val isDragging = draggedNoteId == note.id
-            // Prefer suite drop highlight when pointer is over another topic.
             val suiteHover = viewModel.state.noteDragHoverSuiteId
             val isHovered = suiteHover == null && hoverTarget?.first == note.id
             val dropZone = if (isHovered) hoverTarget?.second else null
@@ -116,13 +131,12 @@ fun NoteTreeList(
                     pointerX = x
                     pointerY = y
                     viewModel.beginNoteDrag(note.id)
-                    updateNoteHover(y)
+                    viewModel.updateNoteDragPointer(x, y)
                 },
                 onDrag = { dx, dy ->
                     pointerX += dx
                     pointerY += dy
                     viewModel.updateNoteDragPointer(pointerX, pointerY)
-                    // Only show in-list zones when not over another suite.
                     if (viewModel.state.noteDragHoverSuiteId == null) {
                         updateNoteHover(pointerY)
                     } else {
@@ -175,32 +189,37 @@ private fun NoteTreeRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = indent)
+            .alpha(if (isDragging) 0.35f else 1f)
             .onGloballyPositioned { coords ->
                 val pos = coords.positionInRoot()
                 onLayout(pos.y, pos.y + coords.size.height)
             }
     ) {
         if (dropZone == NoteDropZone.BEFORE) {
-            DropIndicator()
+            DropLine(label = "above")
         }
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    when {
-                        dropZone == NoteDropZone.INSIDE -> AppColors.Accent.copy(alpha = 0.12f)
-                        selected -> AppColors.SidebarSelected
-                        else -> Color.Transparent
-                    },
-                    RoundedCornerShape(4.dp)
+                .then(
+                    if (dropZone == NoteDropZone.INSIDE) {
+                        Modifier
+                            .border(2.dp, AppColors.Accent, RoundedCornerShape(6.dp))
+                            .background(AppColors.Accent.copy(alpha = 0.10f), RoundedCornerShape(6.dp))
+                    } else {
+                        Modifier.background(
+                            if (selected) AppColors.SidebarSelected else Color.Transparent,
+                            RoundedCornerShape(4.dp)
+                        )
+                    }
                 )
                 .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
+            DragHandle(
+                active = isDragging,
                 modifier = Modifier
-                    .size(28.dp)
                     .onGloballyPositioned { coords ->
                         val pos = coords.positionInRoot()
                         handleCenterX = pos.x + coords.size.width / 2f
@@ -216,15 +235,8 @@ private fun NoteTreeRow(
                                 onDrag(dragAmount.x, dragAmount.y)
                             }
                         )
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "⠿",
-                    fontSize = 16.sp,
-                    color = if (isDragging) AppColors.Accent else AppColors.TextMuted
-                )
-            }
+                    }
+            )
 
             if (item.hasChildren) {
                 NotionIconButton(onClick = onToggleExpand) {
@@ -250,12 +262,22 @@ private fun NoteTreeRow(
                     onClick = onSelect,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Text(
-                    note.createdAt.format(dateFormatter),
-                    fontSize = 11.sp,
-                    color = AppColors.TextMuted,
-                    modifier = Modifier.padding(start = 28.dp, bottom = 4.dp)
-                )
+                if (dropZone == NoteDropZone.INSIDE) {
+                    Text(
+                        "↳ nest inside",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = AppColors.Accent,
+                        modifier = Modifier.padding(start = 28.dp, bottom = 2.dp)
+                    )
+                } else {
+                    Text(
+                        note.createdAt.format(dateFormatter),
+                        fontSize = 11.sp,
+                        color = AppColors.TextMuted,
+                        modifier = Modifier.padding(start = 28.dp, bottom = 4.dp)
+                    )
+                }
             }
 
             NotionIconButton(onClick = onCreateChild) {
@@ -269,20 +291,124 @@ private fun NoteTreeRow(
         }
 
         if (dropZone == NoteDropZone.AFTER) {
-            DropIndicator()
+            DropLine(label = "below")
         }
     }
 }
 
 @Composable
-private fun DropIndicator() {
+fun DragHandle(
+    active: Boolean,
+    modifier: Modifier = Modifier
+) {
     Box(
+        modifier = modifier
+            .padding(horizontal = 2.dp)
+            .size(width = 28.dp, height = 32.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(
+                if (active) AppColors.Accent.copy(alpha = 0.18f) else AppColors.SidebarHover
+            )
+            .border(
+                width = 1.dp,
+                color = if (active) AppColors.Accent else AppColors.Border,
+                shape = RoundedCornerShape(6.dp)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            repeat(3) {
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    repeat(2) {
+                        Box(
+                            Modifier
+                                .size(3.dp)
+                                .background(
+                                    if (active) AppColors.Accent else AppColors.TextMuted,
+                                    RoundedCornerShape(50)
+                                )
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DropLine(label: String) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp)
-            .height(2.dp)
-            .background(AppColors.Accent, RoundedCornerShape(1.dp))
-    )
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(3.dp)
+                .background(AppColors.Accent, RoundedCornerShape(2.dp))
+        )
+        Text(
+            label,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = AppColors.Accent,
+            modifier = Modifier
+                .padding(horizontal = 6.dp)
+                .background(AppColors.Accent.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 6.dp, vertical = 1.dp)
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(3.dp)
+                .background(AppColors.Accent, RoundedCornerShape(2.dp))
+        )
+    }
+}
+
+@Composable
+fun NoteDragGhost(
+    title: String,
+    hint: String?,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .widthIn(max = 260.dp)
+            .border(1.dp, AppColors.Accent, RoundedCornerShape(8.dp))
+            .background(AppColors.Card, RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            DragHandle(active = true)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = AppColors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+        }
+        if (!hint.isNullOrBlank()) {
+            Text(
+                hint,
+                fontSize = 11.sp,
+                color = AppColors.Accent,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(top = 4.dp, start = 4.dp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
 }
 
 @Composable
@@ -339,25 +465,34 @@ fun SuiteTreeList(
                         onRegisterDropTarget(suite.id, DropRect(left, top, right, bottom))
                     }
             ) {
-                if (isHovered && !isNoteDropTarget && insertBefore) DropIndicator()
+                if (isHovered && !isNoteDropTarget && insertBefore) {
+                    DropLine(label = "here")
+                }
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            when {
-                                isNoteDropTarget -> AppColors.Accent.copy(alpha = 0.18f)
-                                isHovered && !insertBefore -> AppColors.Accent.copy(alpha = 0.08f)
-                                selectedSuiteId == suite.id -> AppColors.SidebarSelected
-                                else -> Color.Transparent
-                            },
-                            RoundedCornerShape(4.dp)
+                        .then(
+                            if (isNoteDropTarget) {
+                                Modifier
+                                    .border(2.dp, AppColors.Accent, RoundedCornerShape(6.dp))
+                                    .background(AppColors.Accent.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
+                            } else {
+                                Modifier.background(
+                                    when {
+                                        isHovered && !insertBefore -> AppColors.Accent.copy(alpha = 0.08f)
+                                        selectedSuiteId == suite.id -> AppColors.SidebarSelected
+                                        else -> Color.Transparent
+                                    },
+                                    RoundedCornerShape(4.dp)
+                                )
+                            }
                         ),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
+                    DragHandle(
+                        active = isDragging || isNoteDropTarget,
                         modifier = Modifier
-                            .size(28.dp)
                             .onGloballyPositioned { coords ->
                                 val pos = coords.positionInRoot()
                                 handleCenterY = pos.y + coords.size.height / 2f
@@ -390,48 +525,54 @@ fun SuiteTreeList(
                                         updateHover(dragAnchorY + dragOffsetY)
                                     }
                                 )
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "⠿",
-                            fontSize = 14.sp,
-                            color = if (isDragging || isNoteDropTarget) AppColors.Accent else AppColors.TextMuted
-                        )
-                    }
+                            }
+                    )
 
-                    SidebarItem(
-                        icon = suite.icon,
-                        title = suite.name,
-                        selected = selectedSuiteId == suite.id || isNoteDropTarget,
-                        onClick = { onSelect(suite.id) },
-                        modifier = Modifier.weight(1f),
-                        trailing = {
-                            Row {
-                                NotionIconButton(onClick = { onRename(suite) }) {
-                                    Icon(
-                                        Icons.Default.Edit,
-                                        contentDescription = "Rename",
-                                        tint = AppColors.TextMuted,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                                if (suites.size > 1) {
-                                    NotionIconButton(onClick = { onDelete(suite) }) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        SidebarItem(
+                            icon = suite.icon,
+                            title = suite.name,
+                            selected = selectedSuiteId == suite.id || isNoteDropTarget,
+                            onClick = { onSelect(suite.id) },
+                            modifier = Modifier.fillMaxWidth(),
+                            trailing = {
+                                Row {
+                                    NotionIconButton(onClick = { onRename(suite) }) {
                                         Icon(
-                                            Icons.Default.Delete,
-                                            contentDescription = "Delete",
+                                            Icons.Default.Edit,
+                                            contentDescription = "Rename",
                                             tint = AppColors.TextMuted,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
+                                    if (suites.size > 1) {
+                                        NotionIconButton(onClick = { onDelete(suite) }) {
+                                            Icon(
+                                                Icons.Default.Delete,
+                                                contentDescription = "Delete",
+                                                tint = AppColors.TextMuted,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
+                        )
+                        if (isNoteDropTarget) {
+                            Text(
+                                "↓ Move here",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = AppColors.Accent,
+                                modifier = Modifier.padding(start = 36.dp, bottom = 4.dp)
+                            )
                         }
-                    )
+                    }
                 }
 
-                if (isHovered && !isNoteDropTarget && !insertBefore) DropIndicator()
+                if (isHovered && !isNoteDropTarget && !insertBefore) {
+                    DropLine(label = "here")
+                }
             }
         }
     }
