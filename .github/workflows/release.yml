@@ -87,12 +87,14 @@ jobs:
             exit 1
           fi
           ./scripts/fix-dmg-applications-link.sh "${dmgs[@]}"
-          # Verify the volume has a symlink, not a Finder alias.
+          # Verify portable symlink + one-click installer; stale .DS_Store must be gone.
           VERIFY="$(mktemp -d)"
           hdiutil attach "${dmgs[0]}" -nobrowse -readonly -mountpoint "$VERIFY/mnt" >/dev/null
           ls -la "$VERIFY/mnt"
           test -L "$VERIFY/mnt/Applications"
           readlink "$VERIFY/mnt/Applications" | grep -qx '/Applications'
+          test -x "$VERIFY/mnt/Install Stickyland.command"
+          test ! -f "$VERIFY/mnt/.DS_Store"
           hdiutil detach "$VERIFY/mnt" -quiet
           rm -rf "$VERIFY"
 
