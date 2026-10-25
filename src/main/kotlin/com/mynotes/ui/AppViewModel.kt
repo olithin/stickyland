@@ -46,7 +46,12 @@ data class AppUiState(
     /** Suite under the pointer while a note is dragged. */
     val noteDragHoverSuiteId: String? = null,
     /** Human-readable drop target, shown on the drag ghost. */
-    val noteDragHint: String? = null
+    val noteDragHint: String? = null,
+    /** Suite currently being reordered (floating ghost under cursor). */
+    val draggingSuiteId: String? = null,
+    val draggingSuiteTitle: String? = null,
+    val draggingSuiteIcon: String? = null,
+    val suiteDragHint: String? = null
 )
 
 class AppViewModel(
@@ -80,6 +85,7 @@ class AppViewModel(
     }
 
     fun beginNoteDrag(noteId: String) {
+        clearSuiteDrag()
         val title = state.notes.find { it.id == noteId }?.title?.ifBlank { "Untitled" } ?: "Note"
         updateState {
             it.copy(
@@ -124,6 +130,45 @@ class AppViewModel(
                     draggingNoteTitle = null,
                     noteDragHoverSuiteId = null,
                     noteDragHint = null
+                )
+            }
+        }
+    }
+
+    fun beginSuiteDrag(suiteId: String) {
+        clearNoteDrag()
+        val suite = state.suites.find { it.id == suiteId } ?: return
+        updateState {
+            it.copy(
+                draggingSuiteId = suiteId,
+                draggingSuiteTitle = suite.name,
+                draggingSuiteIcon = suite.icon,
+                suiteDragHint = "Move between topics"
+            )
+        }
+    }
+
+    fun updateSuiteDragPointer(x: Float, y: Float) {
+        if (state.draggingSuiteId == null) return
+        dragPointerX = x
+        dragPointerY = y
+    }
+
+    fun setSuiteDragHint(hint: String?) {
+        if (state.draggingSuiteId == null) return
+        if (hint != state.suiteDragHint) {
+            updateState { it.copy(suiteDragHint = hint) }
+        }
+    }
+
+    fun clearSuiteDrag() {
+        if (state.draggingSuiteId != null || state.suiteDragHint != null) {
+            updateState {
+                it.copy(
+                    draggingSuiteId = null,
+                    draggingSuiteTitle = null,
+                    draggingSuiteIcon = null,
+                    suiteDragHint = null
                 )
             }
         }
@@ -578,7 +623,16 @@ class AppViewModel(
         scope.launch {
             repository.moveSuite(draggedId, targetId, insertBefore)
             val suites = repository.getAllSuites()
-            updateState { it.copy(suites = suites, statusMessage = "Suite moved") }
+            updateState {
+                it.copy(
+                    suites = suites,
+                    draggingSuiteId = null,
+                    draggingSuiteTitle = null,
+                    draggingSuiteIcon = null,
+                    suiteDragHint = null,
+                    statusMessage = "Suite moved"
+                )
+            }
         }
     }
 

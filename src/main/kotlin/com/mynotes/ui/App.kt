@@ -10,7 +10,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.mynotes.ui.components.NoteDragGhost
+import com.mynotes.ui.components.FloatingDragGhost
 import com.mynotes.ui.components.NoteEditor
 import com.mynotes.ui.components.NoteListPanel
 import com.mynotes.ui.components.SchemaPanel
@@ -99,19 +99,31 @@ fun App(viewModel: AppViewModel) {
                     }
                 }
 
-                val dragTitle = state.draggingNoteTitle
-                if (state.draggingNoteId != null && dragTitle != null) {
+                // Ghost sits so the grab handle stays under the cursor tip.
+                val ghostTitle = state.draggingSuiteTitle ?: state.draggingNoteTitle
+                val ghostHint = when {
+                    state.draggingSuiteId != null -> state.suiteDragHint
+                    else -> state.noteDragHint
+                }
+                val ghostIcon = when {
+                    state.draggingSuiteId != null -> state.draggingSuiteIcon ?: "📁"
+                    state.draggingNoteId != null -> "📄"
+                    else -> null
+                }
+                if (ghostTitle != null && ghostIcon != null) {
                     val localX = viewModel.dragPointerX - rootOffsetX
                     val localY = viewModel.dragPointerY - rootOffsetY
-                    NoteDragGhost(
-                        title = dragTitle,
-                        hint = state.noteDragHint,
+                    FloatingDragGhost(
+                        title = ghostTitle,
+                        hint = ghostHint,
+                        leadingIcon = ghostIcon,
                         modifier = Modifier
                             .zIndex(20f)
                             .offset {
+                                // Offset so the ∷ handle (left side of card) tracks the pointer.
                                 IntOffset(
-                                    (localX + 12f).roundToInt(),
-                                    (localY + 12f).roundToInt()
+                                    (localX - 18f).roundToInt(),
+                                    (localY - 18f).roundToInt()
                                 )
                             }
                     )
