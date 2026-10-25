@@ -38,6 +38,10 @@ if [[ -z "$DMG" ]]; then
   exit 1
 fi
 
+echo "==> Replacing Applications Finder alias with portable symlink..."
+chmod +x "$ROOT/scripts/fix-dmg-applications-link.sh"
+"$ROOT/scripts/fix-dmg-applications-link.sh" "$DMG"
+
 echo ""
 echo "Done!"
 echo "Installer: $DMG"

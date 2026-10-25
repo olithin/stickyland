@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "com.stickyland"
-version = "1.1.2"
+version = "1.1.3"
 
 repositories {
     mavenCentral()
@@ -44,7 +44,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe)
             packageName = "Stickyland"
-            packageVersion = "1.1.2"
+            packageVersion = "1.1.3"
             description = "Stickyland - local notes with screenshots"
             vendor = "olithin"
             copyright = "Copyright olithin"
